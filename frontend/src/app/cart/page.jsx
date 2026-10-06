@@ -1699,7 +1699,7 @@ export default function CartPage() {
                       />
 
                       <span>
-                        Buy Now
+                        Checkout
                       </span>
 
                     </span>

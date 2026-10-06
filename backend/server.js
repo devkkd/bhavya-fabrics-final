@@ -36,6 +36,13 @@ const orderRoutes =
 const paymentRoutes =
   require("./routes/payments");
 
+  const contactInquiryRoutes =
+  require("./routes/contactInquiries.routes");
+
+const {
+  verifyMailer
+} = require("./services/mailer");
+
 const { startSaleExpiryWatcher } =
   require("./services/saleExpiryWatcher");
 
@@ -54,7 +61,12 @@ const requiredEnv = [
   "FRONTEND_URL",
   "JWT_SECRET",
   "ADMIN_EMAIL",
-  "ADMIN_PASSWORD"
+  "ADMIN_PASSWORD",
+
+  "SMTP_HOST",
+  "SMTP_PORT",
+  "SMTP_USER",
+  "SMTP_PASS"
 ];
 
 const missingEnv = requiredEnv.filter(
@@ -244,6 +256,10 @@ app.use(
   paymentRoutes
 );
 
+app.use(
+  "/api/contact-inquiries",
+  contactInquiryRoutes
+);
 /*
 |--------------------------------------------------------------------------
 | 404 Handler
@@ -307,6 +323,14 @@ const startServer = async () => {
 
     await connectDB();
 
+
+    /*
+|--------------------------------------------------------------------------
+| Verify SMTP
+|--------------------------------------------------------------------------
+*/
+
+await verifyMailer();
     /*
     |--------------------------------------------------------------------------
     | Start Sale Expiry Watcher

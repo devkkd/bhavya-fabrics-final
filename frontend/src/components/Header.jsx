@@ -1,18 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  usePathname,
-  useRouter,
-} from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import CustomerLoginModal from "./CustomerLoginModal";
 
 // The exact nav you asked for: Home, New Arrivals, Collections (dropdown),
 // Sale, About, Contact — nothing else.
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:5001/api";
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api";
 
 const FALLBACK_COLLECTIONS = [
   { name: "Cotton Fabrics", slug: "cotton" },
@@ -21,14 +17,22 @@ const FALLBACK_COLLECTIONS = [
   { name: "Embroidered Fabrics", slug: "embroidered" },
 ];
 
-const BASE_NAV_LINKS = [
-  { label: "Home", href: "/" },
-  { label: "New Arrivals", href: "/newArrivals" },
-  { label: "Collections", href: "/collection" },
-  { label: "Sale", href: "/sale", accent: true },
-  { label: "About", href: "/about" },
-  { label: "Contact", href: "/contact" },
-];
+function buildNavLinks(collectionLinks) {
+  return [
+    { label: "Home", href: "/" },
+    { label: "New Arrivals", href: "/newArrivals" },
+    {
+      label: "Collections",
+      href: "/collection",
+      ...(collectionLinks ? { dropdown: collectionLinks } : {}),
+    },
+    { label: "Sale", href: "/sale", accent: true },
+    { label: "About", href: "/about" },
+    { label: "Contact", href: "/contact" },
+  ];
+}
+
+const BASE_NAV_LINKS = buildNavLinks(null);
 
 const MARQUEE_ITEMS = [
   { icon: "truck", text: "Free Shipping" },
@@ -45,6 +49,35 @@ const WHATSAPP_NUMBER = "919829000000";
 // and just update this path. Nothing else needs to change.
 const LOGO_IMAGE_SRC = "/images/logo.png";
 
+/* =========================================================
+   HELPERS
+========================================================= */
+function slugify(value = "") {
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function imageValue(value) {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+
+  return (
+    value?.url ||
+    value?.src ||
+    value?.secure_url ||
+    value?.deliveryUrl ||
+    value?.imageUrl ||
+    ""
+  );
+}
+
+/* =========================================================
+   ICONS
+========================================================= */
 function MarqueeIcon({ name }) {
   switch (name) {
     case "globe":
@@ -92,6 +125,14 @@ function SearchIcon() {
   );
 }
 
+function ArrowIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 12h14M13 6l6 6-6 6" />
+    </svg>
+  );
+}
+
 function WhatsAppIcon() {
   return (
     <svg viewBox="0 0 32 32" fill="currentColor">
@@ -130,11 +171,7 @@ function CartIcon() {
 function MenuIcon({ open }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      {open ? (
-        <path d="M6 6l12 12M18 6L6 18" />
-      ) : (
-        <path d="M3 6h18M3 12h18M3 18h18" />
-      )}
+      {open ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M3 6h18M3 12h18M3 18h18" />}
     </svg>
   );
 }
@@ -147,21 +184,43 @@ function ChevronIcon() {
   );
 }
 
+/* =========================================================
+   HEADER
+========================================================= */
 export default function Header({ wishlistCount = 0, cartCount = 0 }) {
   const pathname = usePathname();
+  const router = useRouter();
 
   const [hideTopbar, setHideTopbar] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchSuggestions, setSearchSuggestions] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [logoError, setLogoError] = useState(false);
   const [navLinks, setNavLinks] = useState(BASE_NAV_LINKS);
-  const router = useRouter();
 
-const [customer, setCustomer] = useState(null);
-const [loginPopupOpen, setLoginPopupOpen] = useState(false);
+  const [customer, setCustomer] = useState(null);
+  const [loginPopupOpen, setLoginPopupOpen] = useState(false);
 
+  // desktop dropdown: which nav item (by href) is currently open
+  const [openDropdown, setOpenDropdown] = useState(null);
+  // mobile drawer accordion: which nav item (by href) is expanded
+  const [mobileOpenDropdown, setMobileOpenDropdown] = useState(null);
+
+  const lastScrollY = useRef(0);
+  const searchInputRef = useRef(null);
+  const closeTimer = useRef(null);
+  const searchAbortRef = useRef(null);
+
+  /* ---------- collections dropdown ---------- */
   useEffect(() => {
     let isMounted = true;
+
+    const fallbackLinks = FALLBACK_COLLECTIONS.map((item) => ({
+      label: item.name,
+      href: `/collection/${item.slug}`,
+    }));
 
     async function loadCollections() {
       try {
@@ -170,11 +229,10 @@ const [loginPopupOpen, setLoginPopupOpen] = useState(false);
           { cache: "no-store" }
         );
 
-        if (!response.ok) {
-          throw new Error("No categories");
-        }
+        if (!response.ok) throw new Error("No categories");
 
         const payload = await response.json();
+
         const categories = Array.isArray(payload?.categories)
           ? payload.categories
           : Array.isArray(payload?.data?.categories)
@@ -187,62 +245,22 @@ const [loginPopupOpen, setLoginPopupOpen] = useState(false);
                 label: item?.name || item?.label || "Collection",
                 href: `/collection/${item?.slug || item?._id || item?.id}`,
               }))
-            : FALLBACK_COLLECTIONS.map((item) => ({
-                label: item.name,
-                href: `/collection/${item.slug}`,
-              }));
+            : fallbackLinks;
 
-        if (isMounted) {
-          setNavLinks([
-            { label: "Home", href: "/" },
-            { label: "New Arrivals", href: "/newArrivals" },
-            {
-              label: "Collections",
-              href: "/collection",
-              dropdown: collectionLinks,
-            },
-            { label: "Sale", href: "/sale", accent: true },
-            { label: "About", href: "/about" },
-            { label: "Contact", href: "/contact" },
-          ]);
-        }
+        if (isMounted) setNavLinks(buildNavLinks(collectionLinks));
       } catch (error) {
-        if (isMounted) {
-          setNavLinks([
-            { label: "Home", href: "/" },
-            { label: "New Arrivals", href: "/newArrivals" },
-            {
-              label: "Collections",
-              href: "/collection",
-              dropdown: FALLBACK_COLLECTIONS.map((item) => ({
-                label: item.name,
-                href: `/collection/${item.slug}`,
-              })),
-            },
-            { label: "Sale", href: "/sale", accent: true },
-            { label: "About", href: "/about" },
-            { label: "Contact", href: "/contact" },
-          ]);
-        }
+        if (isMounted) setNavLinks(buildNavLinks(fallbackLinks));
       }
     }
 
     loadCollections();
+
     return () => {
       isMounted = false;
     };
   }, []);
- 
 
-  // desktop dropdown: which nav item (by href) is currently open
-  const [openDropdown, setOpenDropdown] = useState(null);
-  // mobile drawer accordion: which nav item (by href) is expanded
-  const [mobileOpenDropdown, setMobileOpenDropdown] = useState(null);
-
-  const lastScrollY = useRef(0);
-  const searchInputRef = useRef(null);
-  const closeTimer = useRef(null);
-
+  /* ---------- hide topbar on scroll down ---------- */
   useEffect(() => {
     lastScrollY.current = window.scrollY;
 
@@ -265,8 +283,146 @@ const [loginPopupOpen, setLoginPopupOpen] = useState(false);
     }
   }, [searchOpen]);
 
+  /* ---------- live search suggestions ---------- */
+  useEffect(() => {
+    if (!searchOpen) {
+      setSearchSuggestions([]);
+      setSearchLoading(false);
+
+      if (searchAbortRef.current) {
+        searchAbortRef.current.abort();
+        searchAbortRef.current = null;
+      }
+
+      return;
+    }
+
+    const term = searchQuery.trim();
+
+    if (term.length < 2) {
+      setSearchSuggestions([]);
+      setSearchLoading(false);
+
+      if (searchAbortRef.current) {
+        searchAbortRef.current.abort();
+        searchAbortRef.current = null;
+      }
+
+      return;
+    }
+
+    if (searchAbortRef.current) {
+      searchAbortRef.current.abort();
+    }
+
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
+    setSearchLoading(true);
+
+    const timer = window.setTimeout(async () => {
+      try {
+        // GET ${API_URL}/products?search=${query}&page=1&limit=6
+        const response = await fetch(
+          `${API_URL}/products?search=${encodeURIComponent(term)}&page=1&limit=6`,
+          {
+            method: "GET",
+            cache: "no-store",
+            signal: controller.signal,
+          }
+        );
+
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload?.message || "Search failed");
+        }
+
+        const products = Array.isArray(payload?.products)
+          ? payload.products
+          : Array.isArray(payload?.data)
+          ? payload.data
+          : Array.isArray(payload?.data?.products)
+          ? payload.data.products
+          : [];
+
+        const suggestions = products.slice(0, 6).map((item) => {
+          const regularPrice =
+            Number(
+              item?.pricing?.regularPrice ?? item?.regularPrice ?? item?.price ?? 0
+            ) || 0;
+
+          const salePrice =
+            Number(item?.pricing?.salePrice ?? item?.salePrice ?? 0) || 0;
+
+          const hasSale =
+            regularPrice > 0 && salePrice > 0 && salePrice < regularPrice;
+
+          const discount = hasSale
+            ? Math.round(((regularPrice - salePrice) / regularPrice) * 100)
+            : 0;
+
+          const name =
+            item?.title ||
+            item?.name ||
+            item?.productName ||
+            item?.sku ||
+            "Product";
+
+          return {
+            id: item?._id || item?.id || item?.slug || item?.sku,
+            // slug preserve: product detail page isi se khulega
+            slug: String(item?.slug || slugify(name) || "").trim(),
+            name,
+            sku: item?.sku || "",
+            image:
+              imageValue(item?.mainImage) ||
+              imageValue(item?.image) ||
+              imageValue(item?.imageUrl) ||
+              imageValue(Array.isArray(item?.images) ? item.images[0] : "") ||
+              imageValue(Array.isArray(item?.gallery) ? item.gallery[0] : ""),
+            regularPrice,
+            salePrice,
+            hasSale,
+            discount,
+          };
+        });
+
+        if (!controller.signal.aborted) {
+          setSearchSuggestions(suggestions);
+        }
+      } catch (error) {
+        if (error?.name !== "AbortError") {
+          console.error("Header search failed:", error);
+          setSearchSuggestions([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setSearchLoading(false);
+        }
+      }
+    }, 220);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+
+      if (searchAbortRef.current === controller) {
+        searchAbortRef.current = null;
+      }
+    };
+  }, [searchOpen, searchQuery]);
+
+  useEffect(() => {
+    return () => {
+      if (searchAbortRef.current) {
+        searchAbortRef.current.abort();
+      }
+    };
+  }, []);
+
   useEffect(() => {
     document.body.style.overflow = menuOpen ? "hidden" : "";
+
     return () => {
       document.body.style.overflow = "";
     };
@@ -279,6 +435,19 @@ const [loginPopupOpen, setLoginPopupOpen] = useState(false);
     setMenuOpen(false);
   }, [pathname]);
 
+  /* ---------- handlers ---------- */
+  function resetSearch() {
+    if (searchAbortRef.current) {
+      searchAbortRef.current.abort();
+      searchAbortRef.current = null;
+    }
+
+    setSearchOpen(false);
+    setSearchQuery("");
+    setSearchSuggestions([]);
+    setSearchLoading(false);
+  }
+
   function toggleSearch() {
     setMenuOpen(false);
     setSearchOpen((prev) => !prev);
@@ -288,63 +457,84 @@ const [loginPopupOpen, setLoginPopupOpen] = useState(false);
     setSearchOpen(false);
     setMenuOpen((prev) => !prev);
   }
-async function handleAccountClick(event) {
-  event.preventDefault();
-  event.stopPropagation();
 
-  setMenuOpen(false);
+  async function handleAccountClick(event) {
+    event.preventDefault();
+    event.stopPropagation();
 
-  /*
-   * Popup FIRST open hoga.
-   * Isliye 401 aaye ya backend slow ho,
-   * user ko popup immediately dikhega.
-   */
-  setLoginPopupOpen(true);
+    setMenuOpen(false);
 
-  try {
-    const response = await fetch(
-      `${API_URL}/customer-auth/me`,
-      {
+    /*
+     * Popup FIRST open hoga.
+     * Isliye 401 aaye ya backend slow ho,
+     * user ko popup immediately dikhega.
+     */
+    setLoginPopupOpen(true);
+
+    try {
+      const response = await fetch(`${API_URL}/customer-auth/me`, {
         method: "GET",
         credentials: "include",
         cache: "no-store",
+      });
+
+      if (!response.ok) {
+        // Logged out user -> popup open hi rahega
+        setCustomer(null);
+        return;
       }
-    );
 
-    if (!response.ok) {
-      // Logged out user -> popup open hi rahega
+      const payload = await response.json();
+      const user = payload?.user || null;
+
+      if (user) {
+        setCustomer(user);
+        setLoginPopupOpen(false);
+        router.push("/account");
+      }
+    } catch (error) {
+      console.error("Customer session check failed:", error);
+
+      // Backend/session problem ke case mein bhi
+      // popup close nahi hoga.
       setCustomer(null);
-      return;
     }
-
-    const payload = await response.json();
-    const user = payload?.user || null;
-
-    if (user) {
-      setCustomer(user);
-      setLoginPopupOpen(false);
-
-      router.push("/account");
-    }
-  } catch (error) {
-    console.error(
-      "Customer session check failed:",
-      error
-    );
-
-    // Backend/session problem ke case mein bhi
-    // popup close nahi hoga.
-    setCustomer(null);
   }
-}
 
   function handleSearchSubmit(e) {
     e.preventDefault();
-    const query = searchInputRef.current?.value?.trim();
-    if (query) {
-      window.location.href = `/search?q=${encodeURIComponent(query)}`;
-    }
+
+    const query =
+      searchQuery.trim() || searchInputRef.current?.value?.trim() || "";
+
+    if (!query) return;
+
+    resetSearch();
+    router.push(`/search?q=${encodeURIComponent(query)}`);
   }
+
+  /*
+   * Suggestion par click:
+   * search page NAHI khulega, seedha product detail page khulega.
+   * Route: /product/[slug]
+   */
+ function handleSearchSuggestionClick(item) {
+  const slug = String(item?.slug || "").trim();
+
+  if (!slug) return;
+
+  if (searchAbortRef.current) {
+    searchAbortRef.current.abort();
+    searchAbortRef.current = null;
+  }
+
+  setSearchSuggestions([]);
+  setSearchLoading(false);
+  setSearchOpen(false);
+  setSearchQuery("");
+
+  router.push(`/products/${encodeURIComponent(slug)}`);
+}
 
   function isLinkActive(href) {
     return pathname === href || (href !== "/" && pathname.startsWith(href));
@@ -357,6 +547,7 @@ async function handleAccountClick(event) {
       clearTimeout(closeTimer.current);
       closeTimer.current = null;
     }
+
     setOpenDropdown(href);
   }
 
@@ -369,6 +560,8 @@ async function handleAccountClick(event) {
   function toggleMobileDropdown(href) {
     setMobileOpenDropdown((prev) => (prev === href ? null : href));
   }
+
+  const showSearchResults = searchOpen && searchQuery.trim().length >= 2;
 
   return (
     <>
@@ -414,6 +607,7 @@ async function handleAccountClick(event) {
                   </svg>
                 )}
               </span>
+
               <span className="bf-logo-text">
                 <span className="bf-logo-title">Bhavya Fabrics</span>
                 <span className="bf-logo-tagline">Premium Textile Manufacturer</span>
@@ -499,21 +693,21 @@ async function handleAccountClick(event) {
 
               <span className="bf-action-divider" aria-hidden="true" />
 
-         <button
-  type="button"
-  className="bf-plain-icon bf-account-icon"
-  aria-label="Account"
-  onClick={handleAccountClick}
-  style={{
-    border: "none",
-    background: "transparent",
-    padding: 0,
-    margin: 0,
-    font: "inherit",
-  }}
->
-  <AccountIcon />
-</button>
+              <button
+                type="button"
+                className="bf-plain-icon bf-account-icon"
+                aria-label="Account"
+                onClick={handleAccountClick}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  padding: 0,
+                  margin: 0,
+                  font: "inherit",
+                }}
+              >
+                <AccountIcon />
+              </button>
 
               <a
                 href="/wishlist"
@@ -541,47 +735,130 @@ async function handleAccountClick(event) {
             </div>
           </div>
 
+          {/* ======================= SEARCH PANEL ======================= */}
           <div className={`bf-search-panel${searchOpen ? " bf-search-panel--open" : ""}`}>
             <form className="bf-search-form" onSubmit={handleSearchSubmit}>
               <SearchIcon />
+
               <input
                 ref={searchInputRef}
                 type="text"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") resetSearch();
+                }}
                 placeholder="Search products, collections..."
                 className="bf-search-input"
+                autoComplete="off"
+                aria-label="Search products"
               />
-              <button type="submit" className="bf-search-submit">
-                <span>Search</span>
+
+              {/* Mobile par text hide hota hai, isliye icon bhi diya hai */}
+              <button type="submit" className="bf-search-submit" aria-label="Search">
+                <span className="bf-search-submit-text">Search</span>
+                <span className="bf-search-submit-icon">
+                  <SearchIcon />
+                </span>
               </button>
+
               <button
                 type="button"
                 className="bf-search-close"
                 aria-label="Close search"
-                onClick={() => setSearchOpen(false)}
+                onClick={resetSearch}
               >
                 <MenuIcon open={true} />
               </button>
             </form>
+
+            {showSearchResults && (
+              <div className="bf-search-results">
+                {searchLoading ? (
+                  <div className="bf-search-state">Searching products...</div>
+                ) : searchSuggestions.length > 0 ? (
+                  <>
+                    <div className="bf-search-results-list">
+                      {searchSuggestions.map((item, index) => (
+                        <button
+                          key={`${item?.id || item?.name}-${index}`}
+                          type="button"
+                          className="bf-search-result-item"
+                          onClick={() => handleSearchSuggestionClick(item)}
+                        >
+                          <span className="bf-search-result-image">
+                            {item?.image ? <img src={item.image} alt="" /> : <SearchIcon />}
+                          </span>
+
+                          <span className="bf-search-result-copy">
+                            <strong>{item?.name}</strong>
+
+                            {item?.sku ? <small>SKU: {item.sku}</small> : null}
+
+                            <span className="bf-search-result-price">
+                              {item?.hasSale ? (
+                                <>
+                                  <span className="bf-search-result-sale-price">
+                                    ₹{item.salePrice.toLocaleString("en-IN")}
+                                  </span>
+                                  <span className="bf-search-result-old-price">
+                                    ₹{item.regularPrice.toLocaleString("en-IN")}
+                                  </span>
+                                  <span className="bf-search-result-off">
+                                    {item.discount}% OFF
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="bf-search-result-sale-price">
+                                  ₹{item.regularPrice.toLocaleString("en-IN")}
+                                </span>
+                              )}
+                            </span>
+                          </span>
+
+                          <span className="bf-search-result-arrow">
+                            <ArrowIcon />
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      className="bf-search-view-all"
+                      onClick={handleSearchSubmit}
+                    >
+                      <span>View all search results</span>
+                      <ArrowIcon />
+                    </button>
+                  </>
+                ) : (
+                  <div className="bf-search-state">No matching products found.</div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
+        {/* ======================= MOBILE DRAWER ======================= */}
         <div className={`bf-drawer${menuOpen ? " bf-drawer--open" : ""}`}>
           <div className="bf-drawer-quickrow">
-       <button
-  type="button"
-  className="bf-plain-icon"
-  aria-label="Account"
-  onClick={handleAccountClick}
-  style={{
-    border: "none",
-    background: "transparent",
-    padding: 0,
-    margin: 0,
-    font: "inherit",
-  }}
->
-  <AccountIcon />
-</button>
+            <button
+              type="button"
+              className="bf-plain-icon"
+              aria-label="Account"
+              onClick={handleAccountClick}
+              style={{
+                border: "none",
+                background: "transparent",
+                padding: 0,
+                margin: 0,
+                font: "inherit",
+              }}
+            >
+              <AccountIcon />
+            </button>
+
             <a
               href="/wishlist"
               className="bf-plain-icon bf-plain-icon--badged"
@@ -591,6 +868,7 @@ async function handleAccountClick(event) {
               <HeartIcon />
               <span className="bf-badge">{wishlistCount}</span>
             </a>
+
             <a
               href="/cart"
               className="bf-plain-icon bf-plain-icon--badged"
@@ -673,16 +951,17 @@ async function handleAccountClick(event) {
 
       {/* spacer so page content never sits behind the fixed header */}
       <div className="bf-header-spacer" aria-hidden="true" />
-    <CustomerLoginModal
-  open={loginPopupOpen}
-  onClose={() => {
-    setLoginPopupOpen(false);
-  }}
-  onSuccess={(user) => {
-    setCustomer(user);
-    setLoginPopupOpen(false);
-  }}
-/>
+
+      <CustomerLoginModal
+        open={loginPopupOpen}
+        onClose={() => {
+          setLoginPopupOpen(false);
+        }}
+        onSuccess={(user) => {
+          setCustomer(user);
+          setLoginPopupOpen(false);
+        }}
+      />
 
       <style>{`
         :root {
@@ -704,9 +983,7 @@ async function handleAccountClick(event) {
           --bf-radius: 10px;
         }
 
-        * {
-          box-sizing: border-box;
-        }
+        * { box-sizing: border-box; }
 
         .bf-header {
           position: fixed;
@@ -721,14 +998,10 @@ async function handleAccountClick(event) {
         /* Header height is driven by the same breakpoint (900px) that swaps
            the desktop nav for the hamburger, so the spacer never jumps out
            of sync with the actual header height. */
-        .bf-header-spacer {
-          height: calc(var(--bf-topbar-h) + var(--bf-nav-h));
-        }
+        .bf-header-spacer { height: calc(var(--bf-topbar-h) + var(--bf-nav-h)); }
 
         @media (max-width: 900px) {
-          .bf-header-spacer {
-            height: calc(var(--bf-topbar-h-mobile) + var(--bf-nav-h-mobile));
-          }
+          .bf-header-spacer { height: calc(var(--bf-topbar-h-mobile) + var(--bf-nav-h-mobile)); }
         }
 
         /* ---------- Topbar / marquee ---------- */
@@ -738,11 +1011,7 @@ async function handleAccountClick(event) {
           overflow: hidden;
           transition: height 0.35s ease, opacity 0.3s ease;
         }
-
-        .bf-header--compact .bf-topbar {
-          height: 0;
-          opacity: 0;
-        }
+        .bf-header--compact .bf-topbar { height: 0; opacity: 0; }
 
         .bf-topbar-track {
           display: flex;
@@ -752,18 +1021,11 @@ async function handleAccountClick(event) {
           white-space: nowrap;
           animation: bf-marquee 22s linear infinite;
         }
-
-        .bf-header:hover .bf-topbar-track {
-          animation-play-state: paused;
-        }
+        .bf-header:hover .bf-topbar-track { animation-play-state: paused; }
 
         @keyframes bf-marquee {
-          from {
-            transform: translateX(0);
-          }
-          to {
-            transform: translateX(-50%);
-          }
+          from { transform: translateX(0); }
+          to { transform: translateX(-50%); }
         }
 
         .bf-topbar-item {
@@ -776,64 +1038,26 @@ async function handleAccountClick(event) {
           letter-spacing: 0.2px;
           padding: 0 22px;
         }
-
-        .bf-topbar-icon {
-          display: inline-flex;
-          width: 15px;
-          height: 15px;
-          flex-shrink: 0;
-        }
-
-        .bf-topbar-icon svg {
-          width: 100%;
-          height: 100%;
-        }
-
-        .bf-topbar-divider {
-          margin-left: 22px;
-          color: rgba(244, 241, 234, 0.4);
-          font-weight: 300;
-        }
+        .bf-topbar-icon { display: inline-flex; width: 15px; height: 15px; flex-shrink: 0; }
+        .bf-topbar-icon svg { width: 100%; height: 100%; }
+        .bf-topbar-divider { margin-left: 22px; color: rgba(244, 241, 234, 0.4); font-weight: 300; }
 
         @media (max-width: 900px) {
-          .bf-topbar {
-            height: var(--bf-topbar-h-mobile);
-          }
-          .bf-topbar-item {
-            font-size: 12px;
-            padding: 0 14px;
-          }
-          .bf-topbar-divider {
-            margin-left: 14px;
-          }
+          .bf-topbar { height: var(--bf-topbar-h-mobile); }
+          .bf-topbar-item { font-size: 12px; padding: 0 14px; }
+          .bf-topbar-divider { margin-left: 14px; }
         }
-
         @media (max-width: 480px) {
-          .bf-topbar-item {
-            font-size: 11px;
-            gap: 6px;
-            padding: 0 10px;
-          }
-          .bf-topbar-icon {
-            width: 13px;
-            height: 13px;
-          }
-          .bf-topbar-divider {
-            margin-left: 10px;
-          }
+          .bf-topbar-item { font-size: 11px; gap: 6px; padding: 0 10px; }
+          .bf-topbar-icon { width: 13px; height: 13px; }
+          .bf-topbar-divider { margin-left: 10px; }
         }
-
         @media (max-width: 360px) {
-          .bf-topbar-item {
-            font-size: 10px;
-          }
+          .bf-topbar-item { font-size: 10px; }
         }
 
         /* ---------- Main nav ---------- */
-        .bf-nav {
-          background: var(--bf-cream);
-          position: relative;
-        }
+        .bf-nav { background: var(--bf-cream); position: relative; }
 
         .bf-nav-inner {
           height: var(--bf-nav-h);
@@ -845,19 +1069,11 @@ async function handleAccountClick(event) {
           gap: 20px;
           flex-wrap: nowrap;
         }
-
         @media (max-width: 900px) {
-          .bf-nav-inner {
-            height: var(--bf-nav-h-mobile);
-            padding: 0 16px;
-            gap: 10px;
-          }
+          .bf-nav-inner { height: var(--bf-nav-h-mobile); padding: 0 16px; gap: 10px; }
         }
-
         @media (max-width: 360px) {
-          .bf-nav-inner {
-            gap: 6px;
-          }
+          .bf-nav-inner { gap: 6px; }
         }
 
         /* Logo (image slot) */
@@ -869,7 +1085,6 @@ async function handleAccountClick(event) {
           flex-shrink: 0;
           min-width: 0;
         }
-
         .bf-logo-icon {
           display: flex;
           align-items: center;
@@ -882,29 +1097,9 @@ async function handleAccountClick(event) {
           background: #fff;
           border: 1px solid rgba(138, 106, 61, 0.35);
         }
-
-        /* Drop your logo file here (see LOGO_IMAGE_SRC in the component) —
-           it will automatically fit and stay perfectly aligned. */
-        .bf-logo-icon img {
-          width: 100%;
-          height: 100%;
-          object-fit: contain;
-          display: block;
-        }
-
-        .bf-logo-icon svg {
-          width: 78%;
-          height: 78%;
-        }
-
-        .bf-logo-text {
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-          line-height: 1.15;
-          min-width: 0;
-        }
-
+        .bf-logo-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
+        .bf-logo-icon svg { width: 78%; height: 78%; }
+        .bf-logo-text { display: flex; flex-direction: column; gap: 2px; line-height: 1.15; min-width: 0; }
         .bf-logo-title {
           font-family: "Playfair Display", Georgia, "Times New Roman", serif;
           font-size: clamp(15px, 4vw, 24px);
@@ -914,7 +1109,6 @@ async function handleAccountClick(event) {
           overflow: hidden;
           text-overflow: ellipsis;
         }
-
         .bf-logo-tagline {
           font-size: 10.5px;
           font-weight: 600;
@@ -927,17 +1121,9 @@ async function handleAccountClick(event) {
         }
 
         @media (max-width: 480px) {
-          .bf-logo-icon {
-            width: 40px;
-            height: 40px;
-          }
-          .bf-logo {
-            gap: 8px;
-          }
-          .bf-logo-tagline {
-            font-size: 8.5px;
-            letter-spacing: 0.8px;
-          }
+          .bf-logo-icon { width: 40px; height: 40px; }
+          .bf-logo { gap: 8px; }
+          .bf-logo-tagline { font-size: 8.5px; letter-spacing: 0.8px; }
         }
 
         /* Links */
@@ -949,7 +1135,6 @@ async function handleAccountClick(event) {
           flex: 1;
           min-width: 0;
         }
-
         .bf-link {
           display: inline-flex;
           align-items: center;
@@ -967,16 +1152,8 @@ async function handleAccountClick(event) {
           cursor: pointer;
           transition: color 0.2s ease;
         }
-
-        .bf-link:hover {
-          color: var(--bf-green);
-        }
-
-        .bf-link--active {
-          color: var(--bf-green);
-          font-weight: 700;
-        }
-
+        .bf-link:hover { color: var(--bf-green); }
+        .bf-link--active { color: var(--bf-green); font-weight: 700; }
         .bf-link--active::after {
           content: "";
           position: absolute;
@@ -987,36 +1164,13 @@ async function handleAccountClick(event) {
           background: var(--bf-green);
           border-radius: 2px;
         }
+        .bf-link--accent { color: var(--bf-sale); font-weight: 600; }
+        .bf-link--accent:hover { color: var(--bf-sale); opacity: 0.85; }
+        .bf-link--accent.bf-link--active { color: var(--bf-sale); }
+        .bf-link--accent.bf-link--active::after { background: var(--bf-sale); }
 
-        .bf-link--accent {
-          color: var(--bf-sale);
-          font-weight: 600;
-        }
-
-        .bf-link--accent:hover {
-          color: var(--bf-sale);
-          opacity: 0.85;
-        }
-
-        .bf-link--accent.bf-link--active {
-          color: var(--bf-sale);
-        }
-
-        .bf-link--accent.bf-link--active::after {
-          background: var(--bf-sale);
-        }
-
-        @media (max-width: 1150px) {
-          .bf-links {
-            gap: 14px;
-          }
-        }
-
-        @media (max-width: 900px) {
-          .bf-links {
-            display: none;
-          }
-        }
+        @media (max-width: 1150px) { .bf-links { gap: 14px; } }
+        @media (max-width: 900px) { .bf-links { display: none; } }
 
         /* Dropdown (Collections) — opens on hover, closes on mouse leave */
         .bf-nav-item {
@@ -1026,17 +1180,8 @@ async function handleAccountClick(event) {
           padding-bottom: 14px;
           margin-bottom: -14px;
         }
-
-        .bf-chevron {
-          display: inline-flex;
-          width: 13px;
-          height: 13px;
-          transition: transform 0.2s ease;
-        }
-
-        .bf-nav-item--open .bf-chevron {
-          transform: rotate(180deg);
-        }
+        .bf-chevron { display: inline-flex; width: 13px; height: 13px; transition: transform 0.2s ease; }
+        .bf-nav-item--open .bf-chevron { transform: rotate(180deg); }
 
         .bf-dropdown {
           position: absolute;
@@ -1054,14 +1199,12 @@ async function handleAccountClick(event) {
           transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
           z-index: 1100;
         }
-
         .bf-nav-item--open .bf-dropdown {
           opacity: 1;
           visibility: visible;
           pointer-events: auto;
           transform: translateX(-50%) translateY(0);
         }
-
         .bf-dropdown-link {
           display: block;
           padding: 9px 14px;
@@ -1073,33 +1216,12 @@ async function handleAccountClick(event) {
           white-space: nowrap;
           transition: background 0.15s ease, color 0.15s ease;
         }
-
-        .bf-dropdown-link:hover {
-          background: rgba(31, 91, 99, 0.08);
-          color: var(--bf-green);
-        }
+        .bf-dropdown-link:hover { background: rgba(31, 91, 99, 0.08); color: var(--bf-green); }
 
         /* Actions */
-        .bf-actions {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          flex-shrink: 0;
-          margin-left: auto;
-        }
-
-        .bf-action-divider {
-          width: 1px;
-          height: 22px;
-          background: rgba(31, 91, 99, 0.18);
-          flex-shrink: 0;
-        }
-
-        @media (max-width: 640px) {
-          .bf-action-divider {
-            display: none;
-          }
-        }
+        .bf-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; margin-left: auto; }
+        .bf-action-divider { width: 1px; height: 22px; background: rgba(31, 91, 99, 0.18); flex-shrink: 0; }
+        @media (max-width: 640px) { .bf-action-divider { display: none; } }
 
         .bf-icon-btn {
           display: inline-flex;
@@ -1115,12 +1237,7 @@ async function handleAccountClick(event) {
           transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease, border-color 0.2s ease;
           flex-shrink: 0;
         }
-
-        .bf-icon-btn svg {
-          width: 18px;
-          height: 18px;
-        }
-
+        .bf-icon-btn svg { width: 18px; height: 18px; }
         .bf-icon-btn:hover,
         .bf-icon-btn--active {
           background: var(--bf-green);
@@ -1142,16 +1259,8 @@ async function handleAccountClick(event) {
           transition: transform 0.2s ease, box-shadow 0.2s ease;
           flex-shrink: 0;
         }
-
-        .bf-whatsapp-btn svg {
-          width: 20px;
-          height: 20px;
-        }
-
-        .bf-whatsapp-btn:hover {
-          transform: translateY(-2px) scale(1.05);
-          box-shadow: 0 6px 16px rgba(37, 211, 102, 0.45);
-        }
+        .bf-whatsapp-btn svg { width: 20px; height: 20px; }
+        .bf-whatsapp-btn:hover { transform: translateY(-2px) scale(1.05); box-shadow: 0 6px 16px rgba(37, 211, 102, 0.45); }
 
         .bf-plain-icon {
           position: relative;
@@ -1165,20 +1274,9 @@ async function handleAccountClick(event) {
           flex-shrink: 0;
           transition: color 0.2s ease, transform 0.15s ease;
         }
-
-        .bf-plain-icon svg {
-          width: 21px;
-          height: 21px;
-        }
-
-        .bf-plain-icon:hover {
-          color: var(--bf-green);
-          transform: translateY(-1px);
-        }
-
-        .bf-plain-icon--badged {
-          margin-left: 2px;
-        }
+        .bf-plain-icon svg { width: 21px; height: 21px; }
+        .bf-plain-icon:hover { color: var(--bf-green); transform: translateY(-1px); }
+        .bf-plain-icon--badged { margin-left: 2px; }
 
         .bf-badge {
           position: absolute;
@@ -1209,102 +1307,40 @@ async function handleAccountClick(event) {
           cursor: pointer;
           flex-shrink: 0;
         }
-
-        .bf-menu-btn svg {
-          width: 20px;
-          height: 20px;
-        }
-
-        @media (max-width: 900px) {
-          .bf-menu-btn {
-            display: inline-flex;
-          }
-        }
+        .bf-menu-btn svg { width: 20px; height: 20px; }
+        @media (max-width: 900px) { .bf-menu-btn { display: inline-flex; } }
 
         @media (max-width: 480px) {
-          .bf-icon-btn,
-          .bf-whatsapp-btn,
-          .bf-menu-btn {
-            width: 34px;
-            height: 34px;
-          }
-          .bf-icon-btn svg {
-            width: 16px;
-            height: 16px;
-          }
-          .bf-whatsapp-btn svg {
-            width: 18px;
-            height: 18px;
-          }
-          .bf-menu-btn svg {
-            width: 18px;
-            height: 18px;
-          }
-          .bf-actions {
-            gap: 4px;
-          }
-          .bf-plain-icon {
-            width: 30px;
-            height: 30px;
-          }
-          .bf-plain-icon svg {
-            width: 18px;
-            height: 18px;
-          }
-          .bf-badge {
-            min-width: 14px;
-            height: 14px;
-            font-size: 9px;
-            line-height: 14px;
-          }
+          .bf-icon-btn, .bf-whatsapp-btn, .bf-menu-btn { width: 34px; height: 34px; }
+          .bf-icon-btn svg { width: 16px; height: 16px; }
+          .bf-whatsapp-btn svg { width: 18px; height: 18px; }
+          .bf-menu-btn svg { width: 18px; height: 18px; }
+          .bf-actions { gap: 4px; }
+          .bf-plain-icon { width: 30px; height: 30px; }
+          .bf-plain-icon svg { width: 18px; height: 18px; }
+          .bf-badge { min-width: 14px; height: 14px; font-size: 9px; line-height: 14px; }
         }
 
         /* Below 600px the top bar only keeps Search / WhatsApp / Cart / Menu —
-           Account and Wishlist move into the drawer's quick-row instead. This
-           is the actual fix for the hamburger disappearing on phones: with
-           all 6 icons + logo trying to fit in ~360-400px of real width, the
-           row overflowed and pushed the menu button off-screen. Dropping two
-           icons here guarantees the row always fits and the menu stays put. */
+           Account and Wishlist move into the drawer's quick-row instead, so the
+           hamburger never gets pushed off-screen on phones. */
         @media (max-width: 600px) {
-          .bf-account-icon,
-          .bf-wishlist-icon,
-          .bf-action-divider {
-            display: none;
-          }
-          .bf-actions {
-            gap: 6px;
-          }
-          .bf-logo-tagline {
-            display: none;
-          }
-          .bf-logo {
-            gap: 8px;
-          }
-          .bf-logo-icon {
-            width: 38px;
-            height: 38px;
-          }
-          .bf-logo-title {
-            font-size: 16px;
-            max-width: 42vw;
-          }
+          .bf-account-icon, .bf-wishlist-icon, .bf-action-divider { display: none; }
+          .bf-actions { gap: 6px; }
+          .bf-logo-tagline { display: none; }
+          .bf-logo { gap: 8px; }
+          .bf-logo-icon { width: 38px; height: 38px; }
+          .bf-logo-title { font-size: 16px; max-width: 42vw; }
         }
-
         @media (max-width: 360px) {
-          .bf-logo-icon {
-            width: 32px;
-            height: 32px;
-          }
-          .bf-logo-title {
-            font-size: 14.5px;
-            max-width: 36vw;
-          }
-          .bf-actions {
-            gap: 4px;
-          }
+          .bf-logo-icon { width: 32px; height: 32px; }
+          .bf-logo-title { font-size: 14.5px; max-width: 36vw; }
+          .bf-actions { gap: 4px; }
         }
 
-        /* ---------- Search panel ---------- */
+        /* =====================================================
+           SEARCH PANEL
+        ===================================================== */
         .bf-search-panel {
           max-height: 0;
           overflow: hidden;
@@ -1312,16 +1348,12 @@ async function handleAccountClick(event) {
           border-top: 1px solid rgba(31, 91, 99, 0.12);
           transition: max-height 0.3s ease, padding 0.3s ease;
         }
-
         .bf-search-panel--open {
-          max-height: 90px;
-          padding: 14px 32px;
+          max-height: 90vh;
+          padding: 14px 32px 16px;
         }
-
         @media (max-width: 900px) {
-          .bf-search-panel--open {
-            padding: 12px 16px;
-          }
+          .bf-search-panel--open { padding: 12px 16px 14px; }
         }
 
         .bf-search-form {
@@ -1335,13 +1367,9 @@ async function handleAccountClick(event) {
           border-radius: 999px;
           padding: 8px 10px 8px 18px;
           color: var(--bf-teal);
+          box-shadow: 0 2px 10px rgba(20, 40, 42, 0.04);
         }
-
-        .bf-search-form svg {
-          width: 18px;
-          height: 18px;
-          flex-shrink: 0;
-        }
+        .bf-search-form svg { width: 18px; height: 18px; flex-shrink: 0; }
 
         .bf-search-input {
           flex: 1;
@@ -1354,20 +1382,14 @@ async function handleAccountClick(event) {
           min-width: 0;
         }
 
-        @media (max-width: 480px) {
-          .bf-search-form {
-            padding: 6px 8px 6px 14px;
-            gap: 8px;
-          }
-          .bf-search-input {
-            font-size: 13px;
-          }
-        }
-
         .bf-search-submit {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
           border: none;
           background: var(--bf-green);
           color: #fff;
+          font-family: inherit;
           font-size: 13.5px;
           font-weight: 600;
           padding: 9px 18px;
@@ -1376,10 +1398,8 @@ async function handleAccountClick(event) {
           flex-shrink: 0;
           transition: background 0.2s ease;
         }
-
-        .bf-search-submit:hover {
-          background: var(--bf-green-dark);
-        }
+        .bf-search-submit:hover { background: var(--bf-green-dark); }
+        .bf-search-submit-icon { display: none; }
 
         .bf-search-close {
           border: none;
@@ -1394,13 +1414,173 @@ async function handleAccountClick(event) {
           flex-shrink: 0;
         }
 
+        /* mobile: Search text ki jagah icon button (ab hamesha dikhega) */
         @media (max-width: 480px) {
-          .bf-search-submit span {
-            display: none;
-          }
+          .bf-search-form { padding: 5px 6px 5px 14px; gap: 8px; }
+          .bf-search-input { font-size: 13.5px; }
           .bf-search-submit {
-            padding: 9px 14px;
+            width: 36px;
+            height: 36px;
+            padding: 0;
           }
+          .bf-search-submit-text { display: none; }
+          .bf-search-submit-icon { display: inline-flex; }
+        }
+
+        /* ---------- results: in-flow (no floating gap) ---------- */
+        .bf-search-results {
+          width: 100%;
+          max-width: 1400px;
+          margin: 8px auto 0;
+          background: #fff;
+          border: 1px solid rgba(31, 91, 99, 0.12);
+          border-radius: 16px;
+          overflow: hidden;
+          box-shadow: 0 12px 30px rgba(20, 40, 42, 0.1);
+        }
+
+        /* desktop / tablet: ek line mein 2 cards */
+        .bf-search-results-list {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+          padding: 8px;
+          max-height: min(58vh, 440px);
+          overflow-y: auto;
+        }
+
+        .bf-search-result-item {
+          width: 100%;
+          min-width: 0;
+          display: grid;
+          grid-template-columns: 64px minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 12px;
+          padding: 10px 12px;
+          border: 1px solid #f0eae2;
+          border-radius: 12px;
+          background: #fdfbf8;
+          text-align: left;
+          font-family: inherit;
+          color: var(--bf-text);
+          cursor: pointer;
+          transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+        }
+        .bf-search-result-item:hover {
+          background: #fff;
+          border-color: rgba(31, 91, 99, 0.35);
+          box-shadow: 0 6px 16px rgba(31, 91, 99, 0.1);
+          transform: translateY(-1px);
+        }
+        .bf-search-result-item:active { transform: scale(0.99); }
+
+        .bf-search-result-image {
+          width: 64px;
+          height: 64px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+          border-radius: 10px;
+          background: #f6f2ec;
+          border: 1px solid #ece4da;
+          color: var(--bf-muted);
+          flex-shrink: 0;
+        }
+        .bf-search-result-image img { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+        .bf-search-result-copy { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+        .bf-search-result-copy strong {
+          color: var(--bf-teal);
+          font-size: 13.5px;
+          font-weight: 600;
+          line-height: 1.3;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .bf-search-result-copy small { color: #8a8a87; font-size: 10.5px; font-weight: 500; }
+
+        .bf-search-result-price { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; line-height: 1; }
+        .bf-search-result-sale-price { color: var(--bf-teal); font-size: 14px; font-weight: 700; }
+        .bf-search-result-old-price { color: #9a9a9a; font-size: 11px; text-decoration: line-through; }
+        .bf-search-result-off {
+          display: inline-flex;
+          align-items: center;
+          padding: 4px 7px;
+          border-radius: 999px;
+          background: rgba(193, 80, 44, 0.1);
+          border: 1px solid rgba(193, 80, 44, 0.22);
+          color: var(--bf-sale);
+          font-size: 9px;
+          font-weight: 700;
+          letter-spacing: 0.3px;
+          white-space: nowrap;
+        }
+
+        .bf-search-result-arrow {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          background: rgba(31, 91, 99, 0.07);
+          color: var(--bf-teal);
+          transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+        }
+        .bf-search-result-arrow svg { width: 14px; height: 14px; }
+        .bf-search-result-item:hover .bf-search-result-arrow {
+          background: var(--bf-teal);
+          color: #fff;
+          transform: translateX(2px);
+        }
+
+        .bf-search-state { padding: 18px 16px; font-size: 13px; color: var(--bf-muted); }
+
+        .bf-search-view-all {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          border: 0;
+          border-top: 1px solid rgba(31, 91, 99, 0.1);
+          background: var(--bf-cream);
+          color: var(--bf-teal);
+          padding: 13px 18px;
+          text-align: left;
+          font-family: inherit;
+          font-size: 13px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: background 0.2s ease;
+        }
+        .bf-search-view-all svg { width: 16px; height: 16px; }
+        .bf-search-view-all:hover { background: #f3eee6; }
+
+        /* mobile: 1 card per row, compact */
+        @media (max-width: 640px) {
+          .bf-search-results { margin-top: 8px; border-radius: 14px; }
+          .bf-search-results-list {
+            grid-template-columns: 1fr;
+            gap: 6px;
+            padding: 6px;
+            max-height: 58vh;
+          }
+          .bf-search-result-item {
+            grid-template-columns: 52px minmax(0, 1fr) auto;
+            gap: 10px;
+            padding: 8px 10px;
+            border-radius: 10px;
+          }
+          .bf-search-result-image { width: 52px; height: 52px; border-radius: 8px; }
+          .bf-search-result-copy strong { font-size: 12.5px; }
+          .bf-search-result-sale-price { font-size: 13px; }
+          .bf-search-result-old-price { font-size: 10px; }
+          .bf-search-result-off { font-size: 8px; padding: 3px 6px; }
+          .bf-search-result-arrow { width: 24px; height: 24px; }
+          .bf-search-view-all { padding: 12px 14px; font-size: 12.5px; }
         }
 
         /* ---------- Mobile drawer ---------- */
@@ -1421,10 +1601,7 @@ async function handleAccountClick(event) {
           padding: calc(var(--bf-topbar-h-mobile) + 24px) 24px 24px;
           overflow-y: auto;
         }
-
-        .bf-drawer--open {
-          transform: translateX(0);
-        }
+        .bf-drawer--open { transform: translateX(0); }
 
         @media (max-width: 380px) {
           .bf-drawer {
@@ -1441,12 +1618,7 @@ async function handleAccountClick(event) {
           margin-bottom: 12px;
           border-bottom: 1px solid rgba(31, 91, 99, 0.12);
         }
-
-        .bf-drawer-links {
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
+        .bf-drawer-links { display: flex; flex-direction: column; gap: 4px; }
 
         .bf-drawer-link {
           display: flex;
@@ -1459,7 +1631,6 @@ async function handleAccountClick(event) {
           padding: 12px 4px;
           border-bottom: 1px solid rgba(31, 91, 99, 0.1);
         }
-
         .bf-drawer-link--trigger {
           width: 100%;
           background: none;
@@ -1469,22 +1640,10 @@ async function handleAccountClick(event) {
           cursor: pointer;
           text-align: left;
         }
+        .bf-drawer-link.bf-link--active { color: var(--bf-green); font-weight: 700; border-bottom-color: var(--bf-green); }
+        .bf-drawer-link.bf-link--accent { color: var(--bf-sale); }
 
-        .bf-drawer-link.bf-link--active {
-          color: var(--bf-green);
-          font-weight: 700;
-          border-bottom-color: var(--bf-green);
-        }
-
-        .bf-drawer-link.bf-link--accent {
-          color: var(--bf-sale);
-        }
-
-        .bf-drawer-group {
-          display: flex;
-          flex-direction: column;
-        }
-
+        .bf-drawer-group { display: flex; flex-direction: column; }
         .bf-drawer-submenu {
           max-height: 0;
           overflow: hidden;
@@ -1492,11 +1651,7 @@ async function handleAccountClick(event) {
           flex-direction: column;
           transition: max-height 0.3s ease;
         }
-
-        .bf-drawer-submenu--open {
-          max-height: 260px;
-        }
-
+        .bf-drawer-submenu--open { max-height: 260px; }
         .bf-drawer-sublink {
           font-size: clamp(13px, 3.6vw, 14.5px);
           font-weight: 500;
@@ -1505,22 +1660,10 @@ async function handleAccountClick(event) {
           padding: 10px 4px 10px 16px;
           border-bottom: 1px solid rgba(31, 91, 99, 0.06);
         }
+        .bf-drawer-sublink:hover { color: var(--bf-green); }
+        .bf-chevron--open { transform: rotate(180deg); }
 
-        .bf-drawer-sublink:hover {
-          color: var(--bf-green);
-        }
-
-        .bf-chevron--open {
-          transform: rotate(180deg);
-        }
-
-        .bf-drawer-actions {
-          margin-top: 24px;
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
-
+        .bf-drawer-actions { margin-top: 24px; display: flex; flex-direction: column; gap: 12px; }
         .bf-drawer-whatsapp {
           display: flex;
           align-items: center;
@@ -1530,11 +1673,7 @@ async function handleAccountClick(event) {
           text-decoration: none;
           color: var(--bf-whatsapp-dark);
         }
-
-        .bf-drawer-whatsapp svg {
-          width: 18px;
-          height: 18px;
-        }
+        .bf-drawer-whatsapp svg { width: 18px; height: 18px; }
 
         .bf-overlay {
           position: fixed;
@@ -1547,16 +1686,16 @@ async function handleAccountClick(event) {
           transition: opacity 0.3s ease;
           z-index: 1001;
         }
-
-        .bf-overlay--visible {
-          opacity: 1;
-          pointer-events: auto;
-        }
+        .bf-overlay--visible { opacity: 1; pointer-events: auto; }
 
         @media (min-width: 901px) {
-          .bf-drawer,
-          .bf-overlay {
-            display: none;
+          .bf-drawer, .bf-overlay { display: none; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .bf-topbar-track, .bf-search-panel, .bf-search-result-item, .bf-search-result-arrow {
+            transition: none !important;
+            animation: none !important;
           }
         }
       `}</style>

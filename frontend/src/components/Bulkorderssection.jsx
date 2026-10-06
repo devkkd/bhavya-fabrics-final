@@ -123,7 +123,7 @@ export default function BulkOrdersSection() {
             }}
           >
             <a
-              href="#"
+              href="/contact"
               style={{
                 fontFamily: "'Poppins', sans-serif",
                 fontWeight: 600,
