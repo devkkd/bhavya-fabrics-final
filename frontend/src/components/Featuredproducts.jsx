@@ -226,7 +226,15 @@ function normalizeBackendProduct(item) {
 
         return [
           `${name.toLowerCase()}|${value.toLowerCase()}|${hex.toLowerCase()}`,
-          { index, name, value, hex },
+          {
+            index,
+            name,
+            value,
+            hex,
+            images: Array.isArray(color?.images)
+              ? color.images.map(imageValue).filter(Boolean)
+              : [],
+          },
         ];
       })
     ).values()
@@ -264,7 +272,19 @@ function normalizeBackendProduct(item) {
         const name = getOptionName(size) || `Size ${index + 1}`;
         const value = getOptionValue(size) || name;
 
-        return [value.toLowerCase(), { index, name, value }];
+        return [
+          value.toLowerCase(),
+          {
+            index,
+            name,
+            value,
+            details: size?.details || "",
+            meters: size?.meters ?? null,
+            shippingCharge: size?.shippingCharge ?? null,
+            regularPrice: size?.regularPrice ?? null,
+            salePrice: size?.salePrice ?? null,
+          },
+        ];
       })
     ).values()
   );
@@ -287,6 +307,10 @@ function normalizeBackendProduct(item) {
     sizeOptions,
     variants,
     variantsEnabled: Boolean(item?.variantsEnabled || variants.length > 0),
+    sellingMode: item?.sellingMode === "meter" ? "meter" : "piece",
+    priceUnit:
+      item?.priceUnit ||
+      (item?.sellingMode === "meter" ? "Per Meter" : "Per Piece"),
   };
 }
 
@@ -488,11 +512,23 @@ function ProductCard({ product }) {
   const showSku = Boolean(selectedSku) && selectedSku !== "—";
 
   /* ---------- images ---------- */
+  const selectedColorImages = Array.isArray(selectedColorOption?.images)
+    ? selectedColorOption.images
+        .map((image) => (typeof image === "string" ? image : image?.url))
+        .filter(Boolean)
+    : [];
+
   const displayImage =
-    selectedVariant?.images?.[0] || product?.image || FALLBACK_IMAGE;
+    selectedVariant?.images?.[0] ||
+    selectedColorImages?.[0] ||
+    product?.image ||
+    FALLBACK_IMAGE;
 
   const displayHoverImage =
-    selectedVariant?.images?.[1] || product?.hoverImage || displayImage;
+    selectedVariant?.images?.[1] ||
+    selectedColorImages?.[1] ||
+    product?.hoverImage ||
+    displayImage;
 
   const hasSecondImage = Boolean(
     displayHoverImage && displayHoverImage !== displayImage

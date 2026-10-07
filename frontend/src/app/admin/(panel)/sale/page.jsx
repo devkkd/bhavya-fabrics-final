@@ -420,6 +420,8 @@ function ProductRow({
   product,
   onToggle,
   updatingId,
+  selected,
+  onSelect,
 }) {
   const prices =
     getProductPrice(
@@ -438,6 +440,17 @@ function ProductRow({
 
   return (
     <div className="sale-product-row">
+
+      <div style={{ width: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <input
+          type="checkbox"
+          checked={Boolean(selected)}
+          onChange={(event) =>
+            onSelect(product?._id, event.target.checked)
+          }
+          aria-label={`Select ${product?.title || "product"}`}
+        />
+      </div>
 
       <div className="sale-product-main">
 
@@ -609,6 +622,18 @@ export default function SaleAdminPage() {
 
   const [updatingId, setUpdatingId] =
     useState("");
+
+  const [selectedProductIds, setSelectedProductIds] =
+    useState([]);
+
+  const [bulkDiscount, setBulkDiscount] =
+    useState("");
+
+  const [bulkDuration, setBulkDuration] =
+    useState("3");
+
+  const [bulkWorking, setBulkWorking] =
+    useState(false);
 
   const [search, setSearch] =
     useState("");
@@ -1429,6 +1454,18 @@ export default function SaleAdminPage() {
               body: JSON.stringify({
                 showOnSale:
                   value,
+                ...(value
+                  ? {
+                      durationDays:
+                        Number(bulkDuration || 3),
+                      ...(bulkDiscount !== ""
+                        ? {
+                            discountPercent:
+                              Number(bulkDiscount),
+                          }
+                        : {}),
+                    }
+                  : {}),
               }),
             }
           );
@@ -1495,6 +1532,151 @@ export default function SaleAdminPage() {
         setUpdatingId("");
       }
     };
+
+  /* =======================================================
+     BULK SALE MANAGEMENT
+  ======================================================= */
+
+  const toggleProductSelection = (id, checked) => {
+    setSelectedProductIds((current) =>
+      checked
+        ? Array.from(new Set([...current, String(id)]))
+        : current.filter((item) => item !== String(id))
+    );
+  };
+
+  const selectAllVisible = (checked) => {
+    const ids = filteredProducts.map((product) => String(product._id));
+    setSelectedProductIds((current) =>
+      checked
+        ? Array.from(new Set([...current, ...ids]))
+        : current.filter((id) => !ids.includes(id))
+    );
+  };
+
+  const runBulkSale = async () => {
+    if (!selectedProductIds.length || bulkWorking) return;
+
+    setBulkWorking(true);
+    setError("");
+
+    try {
+      const body = {
+        productIds: selectedProductIds,
+        durationDays: Number(bulkDuration || 3),
+      };
+
+      if (bulkDiscount !== "") {
+        body.discountPercent = Number(bulkDiscount);
+      }
+
+      const response = await fetch(
+        `${API_URL}/sale/admin/products/bulk-add`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data?.message || "Failed to add selected products to sale."
+        );
+      }
+
+      setSelectedProductIds([]);
+      showSuccess(data.message || "Selected products added to sale.");
+      await loadSaleAdmin(false);
+    } catch (bulkError) {
+      setError(bulkError?.message || "Bulk sale failed.");
+    } finally {
+      setBulkWorking(false);
+    }
+  };
+
+  const runBulkRemove = async () => {
+    if (!selectedProductIds.length || bulkWorking) return;
+
+    setBulkWorking(true);
+    setError("");
+
+    try {
+      const response = await fetch(
+        `${API_URL}/sale/admin/products/bulk-remove`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            productIds: selectedProductIds,
+          }),
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data?.message || "Failed to remove selected products from sale."
+        );
+      }
+
+      setSelectedProductIds([]);
+      showSuccess(data.message || "Selected products removed from sale.");
+      await loadSaleAdmin(false);
+    } catch (bulkError) {
+      setError(bulkError?.message || "Bulk remove failed.");
+    } finally {
+      setBulkWorking(false);
+    }
+  };
+
+  const removeAllSaleProducts = async () => {
+    if (bulkWorking) return;
+
+    const confirmed = window.confirm(
+      "Remove every currently active product from Sale?"
+    );
+
+    if (!confirmed) return;
+
+    setBulkWorking(true);
+    setError("");
+
+    try {
+      const response = await fetch(
+        `${API_URL}/sale/admin/products/remove-all`,
+        {
+          method: "POST",
+          credentials: "include",
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data?.message || "Failed to remove all sale products."
+        );
+      }
+
+      setSelectedProductIds([]);
+      showSuccess(data.message || "All sale products removed.");
+      await loadSaleAdmin(false);
+    } catch (bulkError) {
+      setError(bulkError?.message || "Remove all failed.");
+    } finally {
+      setBulkWorking(false);
+    }
+  };
 
   /* =======================================================
      CLEAR SEARCH
@@ -2583,6 +2765,95 @@ export default function SaleAdminPage() {
 
         </div>
 
+        {/* BULK SALE CONTROLS */}
+
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: 8,
+            padding: "10px 0 12px",
+          }}
+        >
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11 }}>
+            <input
+              type="checkbox"
+              checked={
+                filteredProducts.length > 0 &&
+                filteredProducts.every((product) =>
+                  selectedProductIds.includes(String(product._id))
+                )
+              }
+              onChange={(event) => selectAllVisible(event.target.checked)}
+            />
+            Select visible
+          </label>
+
+          <input
+            type="number"
+            min="0"
+            max="100"
+            step="1"
+            value={bulkDiscount}
+            onChange={(event) => setBulkDiscount(event.target.value)}
+            placeholder="Discount %"
+            style={{
+              width: 105,
+              height: 34,
+              border: "1px solid #DDD5CC",
+              borderRadius: 7,
+              padding: "0 8px",
+            }}
+          />
+
+          <select
+            value={bulkDuration}
+            onChange={(event) => setBulkDuration(event.target.value)}
+            style={{
+              width: 105,
+              height: 34,
+              border: "1px solid #DDD5CC",
+              borderRadius: 7,
+              padding: "0 8px",
+              background: "#fff",
+            }}
+          >
+            <option value="1">1 Day</option>
+            <option value="3">3 Days</option>
+            <option value="7">7 Days</option>
+            <option value="10">10 Days</option>
+            <option value="30">30 Days</option>
+          </select>
+
+          <button
+            type="button"
+            className="refresh-button"
+            disabled={!selectedProductIds.length || bulkWorking}
+            onClick={runBulkSale}
+          >
+            {bulkWorking ? "Working..." : `Apply Sale (${selectedProductIds.length})`}
+          </button>
+
+          <button
+            type="button"
+            className="refresh-button"
+            disabled={!selectedProductIds.length || bulkWorking}
+            onClick={runBulkRemove}
+          >
+            Remove Selected
+          </button>
+
+          <button
+            type="button"
+            className="refresh-button"
+            disabled={bulkWorking}
+            onClick={removeAllSaleProducts}
+          >
+            Remove All Sale
+          </button>
+        </div>
+
         {/* PRODUCTS */}
 
         <div className="sale-products-list">
@@ -2629,6 +2900,10 @@ export default function SaleAdminPage() {
                   updatingId={
                     updatingId
                   }
+                  selected={selectedProductIds.includes(
+                    String(product._id)
+                  )}
+                  onSelect={toggleProductSelection}
                 />
               )
             )

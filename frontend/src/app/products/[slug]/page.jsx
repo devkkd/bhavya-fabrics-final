@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -1552,6 +1552,260 @@ const PD_STYLES = `
   font-weight: 700;
   color: #295C65;
 }
+
+.pd-related-content {
+  min-width: 0;
+  padding: 13px 13px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.pd-related-title-link {
+  color: #173C46;
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.08;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.pd-related-title-link:hover {
+  color: #295C65;
+}
+
+.pd-related-sku {
+  color: #77716A;
+  font-size: 9px;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.pd-related-price-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.pd-related-old-price {
+  color: #999;
+  font-size: 10px;
+  text-decoration: line-through;
+}
+
+.pd-related-new-price {
+  color: #295C65;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.pd-related-option {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pd-related-option-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pd-related-option-head span {
+  color: #9A9289;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.pd-related-option-head strong {
+  min-width: 0;
+  color: #295C65;
+  font-size: 9px;
+  font-weight: 700;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pd-related-color-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.pd-related-color-btn {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(0,0,0,.10);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.pd-related-color-btn:hover {
+  transform: scale(1.08);
+}
+
+.pd-related-color-btn.is-active {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #295C65;
+}
+
+.pd-related-size-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.pd-related-size-btn {
+  min-width: 36px;
+  min-height: 27px;
+  padding: 0 8px;
+  border: 1px solid #DCD4CB;
+  border-radius: 6px;
+  background: #fff;
+  color: #295C65;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .2s ease;
+}
+
+.pd-related-size-btn:hover:not(:disabled),
+.pd-related-size-btn.is-active {
+  border-color: #295C65;
+  background: #295C65;
+  color: #fff;
+}
+
+.pd-related-size-btn:disabled {
+  background: #F2EEE9;
+  color: #B9B1A8;
+  cursor: not-allowed;
+  opacity: .65;
+}
+
+.pd-related-pieces-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+  padding-top: 7px;
+  border-top: 1px solid #EEE7DF;
+}
+
+.pd-related-pieces-row > span {
+  color: #8A837B;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.pd-related-pieces-control {
+  display: inline-flex;
+  align-items: center;
+  height: 29px;
+  padding: 2px;
+  border: 1px solid #DDD5CC;
+  border-radius: 6px;
+  background: #F7F4EF;
+}
+
+.pd-related-pieces-control button {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #295C65;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.pd-related-pieces-control button:hover:not(:disabled) {
+  background: #EAE4DC;
+}
+
+.pd-related-pieces-control button:disabled {
+  color: #C9C1B8;
+  cursor: not-allowed;
+}
+
+.pd-related-pieces-control strong {
+  min-width: 25px;
+  color: #295C65;
+  font-size: 10px;
+  text-align: center;
+}
+
+.pd-related-message {
+  color: #9C4B37;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.pd-related-actions {
+  display: flex;
+  min-width: 0;
+}
+
+.pd-related-actions > * {
+  max-width: 100%;
+}
+
+.pd-related-actions .cart-status-full {
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.pd-related-actions .cart-qty-control {
+  flex: 0 0 auto;
+}
+
+.pd-related-actions .cart-remove-btn {
+  flex: 1 1 auto;
+}
+
+.pd-related-image img {
+  object-fit: contain;
+  background: #fff;
+}
+
+@media (max-width: 700px) {
+  .pd-related-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .pd-related-card {
+    border-radius: 10px;
+  }
+
+  .pd-related-image {
+    aspect-ratio: 1 / 1;
+  }
+
+  .pd-related-content {
+    padding: 13px;
+  }
+
+  .pd-related-title-link {
+    font-size: 17px;
+  }
+}
+
 `;
 
 function ProductStyles() {
@@ -1621,8 +1875,78 @@ function optionMatches(a, b) {
     .map((x) => x.toLowerCase())
     .filter(Boolean);
 
+  const canonical = (value) =>
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "")
+      .replace(/[._-]+/g, "");
+
+  const leftCanonical = left.map(canonical).filter(Boolean);
+  const rightCanonical = right.map(canonical).filter(Boolean);
+
   return left.some((value) =>
-    right.includes(value)
+    right.includes(value) ||
+    leftCanonical.includes(canonical(value)) &&
+      rightCanonical.includes(canonical(value))
+  );
+}
+
+function cartItemMatchesSelection(
+  item,
+  productId,
+  variantId = "",
+  selectedColor = "",
+  selectedSize = ""
+) {
+  const itemProductId =
+    item?.productId ||
+    item?.product?._id ||
+    item?.product?.id ||
+    "";
+
+  if (
+    String(itemProductId) !==
+    String(productId || "")
+  ) {
+    return false;
+  }
+
+  const itemVariantId = String(
+    item?.variantId || ""
+  );
+
+  const wantedVariantId = String(
+    variantId || ""
+  );
+
+  if (
+    wantedVariantId &&
+    itemVariantId
+  ) {
+    return (
+      wantedVariantId ===
+      itemVariantId
+    );
+  }
+
+  const itemColor =
+    item?.selectedColor?.name ||
+    item?.selectedColor?.value ||
+    item?.selectedColor ||
+    "";
+
+  const itemSize =
+    item?.selectedSize?.name ||
+    item?.selectedSize?.value ||
+    item?.selectedSize ||
+    "";
+
+  return (
+    String(itemColor).toLowerCase() ===
+      String(selectedColor || "").toLowerCase() &&
+    String(itemSize).toLowerCase() ===
+      String(selectedSize || "").toLowerCase()
   );
 }
 
@@ -1702,6 +2026,16 @@ function normalizeBackendProduct(item) {
                 name,
                 value,
                 hex,
+                regularPrice:
+                  Number(color?.regularPrice ?? 0) || 0,
+                salePrice:
+                  Number(color?.salePrice ?? 0) || 0,
+                images:
+                  Array.isArray(color?.images)
+                    ? color.images
+                        .map((image) => image?.url || image)
+                        .filter(Boolean)
+                    : [],
               },
             ];
           }
@@ -1775,6 +2109,13 @@ function normalizeBackendProduct(item) {
             0
         ) || 0,
 
+      shippingCharge:
+        Number(
+          variant?.shippingCharge ??
+            variant?.size?.shippingCharge ??
+            0
+        ) || 0,
+
       active:
         variant?.active !== false,
 
@@ -1833,6 +2174,29 @@ function normalizeBackendProduct(item) {
                 index,
                 name,
                 value,
+                details:
+                  size?.details ||
+                  size?.description ||
+                  "",
+                shippingCharge:
+                  Number(
+                    size?.shippingCharge ??
+                      size?.shipping ??
+                      size?.shippingPrice ??
+                      0
+                  ) || 0,
+                meters:
+                  size?.meters != null
+                    ? Number(size.meters)
+                    : null,
+                regularPrice:
+                  size?.regularPrice != null
+                    ? Number(size.regularPrice)
+                    : null,
+                salePrice:
+                  size?.salePrice != null
+                    ? Number(size.salePrice)
+                    : null,
               },
             ];
           }
@@ -1841,13 +2205,15 @@ function normalizeBackendProduct(item) {
     );
 
   const moq =
-    Number(
-      item?.moq ||
-        item?.minimumOrderQuantity ||
-        item?.inventory
-          ?.maxQuantityPerOrder ||
-        1
-    ) || 1;
+    item?.sellingMode === "meter"
+      ? 1
+      : Number(
+          item?.moq ||
+            item?.minimumOrderQuantity ||
+            item?.inventory
+              ?.maxQuantityPerOrder ||
+            1
+        ) || 1;
 
   return {
     id:
@@ -1900,9 +2266,57 @@ function normalizeBackendProduct(item) {
     price:
       regularPrice,
 
+    regularPrice,
+    salePrice:
+      Number(
+        item?.pricing?.salePrice ??
+          item?.salePrice ??
+          0
+      ) || 0,
+    showOnSale:
+      Boolean(item?.showOnSale),
+
+    productType:
+      item?.productType ||
+      item?.productTypeName ||
+      item?.type ||
+      (item?.sellingMode === "meter"
+        ? "raw-fabric"
+        : "ready-made-bag"),
+
+    sizeDetails:
+      Array.isArray(item?.options?.sizes)
+        ? item.options.sizes
+        : [],
+
     priceUnit:
       item?.priceUnit ||
-      "Per Meter",
+      (item?.sellingMode === "meter"
+        ? "Per Meter"
+        : "Per Piece"),
+
+    sellingMode:
+      item?.sellingMode === "meter"
+        ? "meter"
+        : "piece",
+
+    bulkOrderNote:
+      item?.bulkOrderNote ||
+      "Contact us for bulk orders.",
+
+    meterConfig:
+      item?.meterConfig || {
+        enabled: false,
+        foldLength: "",
+        minMeters: null,
+        maxMeters: null,
+        incrementMeters: null,
+      },
+
+    shippingRules:
+      Array.isArray(item?.shippingRules)
+        ? item.shippingRules
+        : [],
 
     badge:
       Boolean(
@@ -1949,14 +2363,7 @@ function normalizeBackendProduct(item) {
 
     moq,
 
-    colors:
-      colors.length > 0
-        ? colors
-        : [
-            "#F1EDE4",
-            "#295C65",
-            "#BE9D6B",
-          ],
+    colors,
 
     colorOptions,
 
@@ -2010,12 +2417,803 @@ function handleImageError(event) {
     PLACEHOLDER_IMAGE;
 }
 
+
+function SyncedRelatedProductCard({
+  item,
+  onLoginRequired,
+}) {
+  const {
+    addToCart,
+    items = [],
+  } = useCart();
+
+  const {
+    toggleSave,
+    isSaved,
+  } = useWishlist();
+
+  const [activeColor, setActiveColor] =
+    useState(0);
+
+  const [selectedSize, setSelectedSize] =
+    useState("");
+
+  const [pieces, setPieces] =
+    useState(
+      Math.max(
+        1,
+        Number(item?.moq || 1)
+      )
+    );
+
+  const [cardMessage, setCardMessage] =
+    useState("");
+
+  const colorOptions =
+    Array.isArray(item?.colorOptions)
+      ? item.colorOptions
+      : [];
+
+  const selectedColor =
+    colorOptions[
+      Math.min(
+        activeColor,
+        Math.max(
+          0,
+          colorOptions.length - 1
+        )
+      )
+    ] || "";
+
+  const selectedColorValue =
+    getOptionValue(selectedColor) ||
+    getOptionName(selectedColor) ||
+    "";
+
+  const availableSizes = useMemo(() => {
+    const configured =
+      Array.isArray(item?.sizeOptions)
+        ? item.sizeOptions
+        : [];
+
+    const variants =
+      Array.isArray(item?.variants)
+        ? item.variants
+        : [];
+
+    if (!variants.length) {
+      return configured;
+    }
+
+    const filtered = variants
+      .filter((variant) => {
+        if (variant?.active === false) {
+          return false;
+        }
+
+        if (!selectedColorValue) {
+          return true;
+        }
+
+        return optionMatches(
+          {
+            name:
+              variant?.colorName,
+            value:
+              variant?.colorValue,
+            hex:
+              variant?.colorHex,
+          },
+          selectedColor
+        );
+      })
+      .map(
+        (variant) =>
+          variant?.size || {
+            name:
+              variant?.sizeName,
+            value:
+              variant?.sizeValue,
+          }
+      )
+      .filter(Boolean);
+
+    const unique =
+      Array.from(
+        new Map(
+          filtered.map((size) => {
+            const name =
+              getOptionName(size);
+            const value =
+              getOptionValue(size) ||
+              name;
+
+            return [
+              value.toLowerCase(),
+              {
+                name,
+                value,
+              },
+            ];
+          })
+        ).values()
+      );
+
+    return unique.length
+      ? unique
+      : configured;
+  }, [
+    item,
+    selectedColor,
+    selectedColorValue,
+  ]);
+
+  useEffect(() => {
+    const first =
+      availableSizes?.[0]?.value ||
+      availableSizes?.[0]?.name ||
+      "";
+
+    if (!first) {
+      setSelectedSize("");
+      return;
+    }
+
+    const valid =
+      availableSizes.some(
+        (size) =>
+          String(
+            size?.value ||
+              size?.name ||
+              ""
+          ).toLowerCase() ===
+          String(
+            selectedSize || ""
+          ).toLowerCase()
+      );
+
+    if (!valid) {
+      setSelectedSize(first);
+    }
+  }, [
+    availableSizes,
+    selectedSize,
+  ]);
+
+  const selectedVariant = useMemo(() => {
+    if (
+      !item?.variants?.length
+    ) {
+      return null;
+    }
+
+    const requiresColor =
+      colorOptions.length > 0;
+
+    const requiresSize =
+      availableSizes.length > 0;
+
+    if (
+      requiresColor &&
+      !selectedColorValue
+    ) {
+      return null;
+    }
+
+    if (
+      requiresSize &&
+      !selectedSize
+    ) {
+      return null;
+    }
+
+    return (
+      item.variants.find(
+        (variant) => {
+          if (
+            variant?.active === false
+          ) {
+            return false;
+          }
+
+          const colorMatch =
+            selectedColorValue
+              ? optionMatches(
+                  {
+                    name:
+                      variant?.colorName,
+                    value:
+                      variant?.colorValue,
+                    hex:
+                      variant?.colorHex,
+                  },
+                  selectedColor
+                )
+              : true;
+
+          const sizeMatch =
+            selectedSize
+              ? optionMatches(
+                  {
+                    name:
+                      variant?.sizeName,
+                    value:
+                      variant?.sizeValue,
+                  },
+                  selectedSize
+                )
+              : true;
+
+          return (
+            colorMatch &&
+            sizeMatch
+          );
+        }
+      ) || null
+    );
+  }, [
+    item,
+    colorOptions.length,
+    availableSizes.length,
+    selectedColor,
+    selectedColorValue,
+    selectedSize,
+  ]);
+
+  const selectedColorData =
+    colorOptions.find((color) =>
+      optionMatches(
+        color,
+        selectedColor
+      )
+    ) || null;
+
+  const regularPrice =
+    selectedVariant?.regularPrice > 0
+      ? Number(selectedVariant.regularPrice)
+      : selectedColorData?.regularPrice > 0
+      ? Number(selectedColorData.regularPrice)
+      : Number(item?.price || 0);
+
+  const salePrice =
+    selectedVariant?.salePrice > 0
+      ? Number(selectedVariant.salePrice)
+      : selectedColorData?.salePrice > 0
+      ? Number(selectedColorData.salePrice)
+      : Number(item?.salePrice || 0);
+
+  const hasSale =
+    Boolean(item?.showOnSale) &&
+    regularPrice > 0 &&
+    salePrice > 0 &&
+    salePrice < regularPrice;
+
+  const finalPrice =
+    hasSale
+      ? salePrice
+      : regularPrice;
+
+  const discount =
+    hasSale
+      ? Math.round(
+          ((regularPrice - salePrice) /
+            regularPrice) *
+            100
+        )
+      : 0;
+
+  const selectedSku =
+    selectedVariant?.sku ||
+    item?.sku ||
+    "—";
+
+  const selectedImages =
+    selectedVariant?.images?.length
+      ? selectedVariant.images
+      : selectedColorData?.images?.length
+      ? selectedColorData.images
+      : item?.images || [];
+
+  const image =
+    selectedImages?.[0] ||
+    PLACEHOLDER_IMAGE;
+
+  const itemId =
+    item?._id ||
+    item?.id ||
+    "";
+
+  const relatedCartItem =
+    items.find((cartItem) =>
+      cartItemMatchesSelection(
+        cartItem,
+        itemId,
+        selectedVariant?.id || "",
+        selectedColorValue,
+        selectedSize
+      )
+    ) || null;
+
+  const saved =
+    isSaved(String(itemId));
+
+  const stock =
+    selectedVariant?.stock > 0
+      ? Number(
+          selectedVariant.stock
+        )
+      : null;
+
+  const handleColorChange = (
+    index
+  ) => {
+    setActiveColor(index);
+    setSelectedSize("");
+  };
+
+  const handleAdd = useCallback(
+    async () => {
+      if (!itemId) {
+        return {
+          success: false,
+          message:
+            "Product not found",
+        };
+      }
+
+      const requiresColor =
+        item?.variantsEnabled &&
+        colorOptions.length > 0;
+
+      const requiresSize =
+        item?.variantsEnabled &&
+        availableSizes.length > 0;
+
+      if (
+        requiresColor &&
+        !selectedColorValue
+      ) {
+        setCardMessage(
+          "Please select a color."
+        );
+        return {
+          success: false,
+          message:
+            "Please select a color",
+        };
+      }
+
+      if (
+        requiresSize &&
+        !selectedSize
+      ) {
+        setCardMessage(
+          "Please select a size."
+        );
+        return {
+          success: false,
+          message:
+            "Please select a size",
+        };
+      }
+
+      if (
+        item?.variantsEnabled &&
+        !selectedVariant &&
+        (requiresColor ||
+          requiresSize)
+      ) {
+        setCardMessage(
+          "Please select a valid color and size."
+        );
+        return {
+          success: false,
+          message:
+            "Selected variant is unavailable",
+        };
+      }
+
+      if (
+        selectedVariant &&
+        Number(
+          selectedVariant.stock || 0
+        ) <= 0
+      ) {
+        return {
+          success: false,
+          message:
+            "Selected variant is out of stock",
+        };
+      }
+
+      if (
+        selectedVariant &&
+        stock !== null &&
+        pieces > stock
+      ) {
+        setCardMessage(
+          `Only ${stock} units are available.`
+        );
+        return {
+          success: false,
+          message:
+            `Only ${stock} units are available.`,
+        };
+      }
+
+      setCardMessage("");
+
+      const result =
+        await addToCart(
+          String(itemId),
+          Number(pieces) || 1,
+          {
+            selectedColor:
+              selectedColorValue,
+            selectedSize:
+              selectedSize || "",
+            variantId:
+              selectedVariant?.id ||
+              "",
+          }
+        );
+
+      if (
+        result?.loginRequired
+      ) {
+        onLoginRequired?.();
+        setCardMessage(
+          "Please login to add this item."
+        );
+      }
+
+      return result;
+    },
+    [
+      itemId,
+      item,
+      colorOptions.length,
+      availableSizes.length,
+      selectedColorValue,
+      selectedSize,
+      selectedVariant,
+      stock,
+      pieces,
+      addToCart,
+      onLoginRequired,
+    ]
+  );
+
+  return (
+    <article className="pd-related-card">
+      <Link
+        href={`/products/${item.slug}`}
+        className="pd-related-image"
+        aria-label={`View ${item.name}`}
+      >
+        <img
+          src={image}
+          alt={item.name}
+          loading="lazy"
+          onError={handleImageError}
+        />
+      </Link>
+
+      <button
+        type="button"
+        className={`pd-related-save ${
+          saved ? "is-saved" : ""
+        }`}
+        onClick={() =>
+          toggleSave(String(itemId))
+        }
+        aria-label={
+          saved
+            ? "Remove from wishlist"
+            : "Save product"
+        }
+        aria-pressed={saved}
+      >
+        <Heart
+          size={16}
+          strokeWidth={1.9}
+          fill={
+            saved
+              ? "currentColor"
+              : "none"
+          }
+        />
+      </button>
+
+      {hasSale && (
+        <span className="pd-related-badge">
+          {discount}% OFF
+        </span>
+      )}
+
+      <div className="pd-related-content">
+        <Link
+          href={`/products/${item.slug}`}
+          className="pd-related-title-link"
+        >
+          {item.name}
+        </Link>
+
+        <div className="pd-related-sku">
+          SKU: {selectedSku}
+        </div>
+
+        <div className="pd-related-price-row">
+          {hasSale && (
+            <span className="pd-related-old-price">
+              ₹
+              {regularPrice.toLocaleString(
+                "en-IN"
+              )}
+            </span>
+          )}
+          <span className="pd-related-new-price">
+            ₹
+            {finalPrice.toLocaleString(
+              "en-IN"
+            )}
+          </span>
+        </div>
+
+        {colorOptions.length > 0 && (
+          <div className="pd-related-option">
+            <div className="pd-related-option-head">
+              <span>COLOR</span>
+              <strong>
+                {getOptionName(
+                  selectedColor
+                ) || "Select"}
+              </strong>
+            </div>
+
+            <div className="pd-related-color-row">
+              {colorOptions.map(
+                (color, index) => (
+                  <button
+                    key={`${itemId}-color-${index}`}
+                    type="button"
+                    className={`pd-related-color-btn ${
+                      activeColor ===
+                      index
+                        ? "is-active"
+                        : ""
+                    }`}
+                    style={{
+                      backgroundColor:
+                        color?.hex ||
+                        color?.value ||
+                        "#D9D1C7",
+                    }}
+                    onClick={() =>
+                      handleColorChange(
+                        index
+                      )
+                    }
+                    aria-label={`Select ${getOptionName(
+                      color
+                    )}`}
+                    aria-pressed={
+                      activeColor ===
+                      index
+                    }
+                  />
+                )
+              )}
+            </div>
+          </div>
+        )}
+
+        {availableSizes.length > 0 && (
+          <div className="pd-related-option">
+            <div className="pd-related-option-head">
+              <span>SIZE</span>
+              <strong>
+                {selectedSize ||
+                  "Select"}
+              </strong>
+            </div>
+
+            <div className="pd-related-size-row">
+              {availableSizes.map(
+                (size) => {
+                  const value =
+                    getOptionValue(
+                      size
+                    ) ||
+                    getOptionName(
+                      size
+                    );
+
+                  const active =
+                    String(
+                      selectedSize
+                    ).toLowerCase() ===
+                    String(
+                      value
+                    ).toLowerCase();
+
+                  const matchingVariant =
+                    item?.variants?.find(
+                      (variant) => {
+                        const colorMatch =
+                          selectedColorValue
+                            ? optionMatches(
+                                {
+                                  name:
+                                    variant?.colorName,
+                                  value:
+                                    variant?.colorValue,
+                                  hex:
+                                    variant?.colorHex,
+                                },
+                                selectedColor
+                              )
+                            : true;
+
+                        const sizeMatch =
+                          optionMatches(
+                            {
+                              name:
+                                variant?.sizeName,
+                              value:
+                                variant?.sizeValue,
+                            },
+                            size
+                          );
+
+                        return (
+                          variant?.active !==
+                            false &&
+                          colorMatch &&
+                          sizeMatch
+                        );
+                      }
+                    );
+
+                  const outOfStock =
+                    Boolean(
+                      matchingVariant &&
+                      Number(
+                        matchingVariant.stock ||
+                          0
+                      ) <= 0
+                    );
+
+                  return (
+                    <button
+                      key={`${itemId}-size-${value}`}
+                      type="button"
+                      className={`pd-related-size-btn ${
+                        active
+                          ? "is-active"
+                          : ""
+                      }`}
+                      disabled={
+                        outOfStock
+                      }
+                      onClick={() =>
+                        setSelectedSize(
+                          value
+                        )
+                      }
+                    >
+                      {getOptionName(
+                        size
+                      )}
+                    </button>
+                  );
+                }
+              )}
+            </div>
+          </div>
+        )}
+
+        {!relatedCartItem && (
+          <div className="pd-related-pieces-row">
+            <span>PIECES</span>
+            <div className="pd-related-pieces-control">
+              <button
+                type="button"
+                onClick={() =>
+                  setPieces(
+                    (current) =>
+                      Math.max(
+                        1,
+                        current - 1
+                      )
+                  )
+                }
+                disabled={
+                  pieces <= 1
+                }
+                aria-label="Decrease pieces"
+              >
+                <Minus size={13} />
+              </button>
+
+              <strong>
+                {pieces}
+              </strong>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setPieces(
+                    (current) =>
+                      stock
+                        ? Math.min(
+                            current + 1,
+                            stock
+                          )
+                        : Math.min(
+                            current + 1,
+                            100
+                          )
+                  )
+                }
+                disabled={
+                  Boolean(
+                    stock &&
+                    pieces >= stock
+                  )
+                }
+                aria-label="Increase pieces"
+              >
+                <Plus size={13} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {cardMessage && (
+          <div className="pd-related-message">
+            {cardMessage}
+          </div>
+        )}
+
+        <div className="pd-related-actions">
+          <CartStatusButton
+            productId={itemId}
+            quantity={pieces}
+            selectedColor={
+              selectedColorValue
+            }
+            selectedSize={
+              selectedSize
+            }
+            variantId={
+              selectedVariant?.id ||
+              ""
+            }
+            onAdd={
+              handleAdd
+            }
+            showLabel={true}
+            compact={false}
+          />
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export default function ProductDetailPage() {
   const params = useParams();
+
+  const router = useRouter();
 
   const {
     addToCart,
     isInCart,
+    prepareBuyNow,
+    items = [],
+    updateQuantity,
+    removeItem,
   } = useCart();
 
   const {
@@ -2057,10 +3255,6 @@ export default function ProductDetailPage() {
   const [cartMsg, setCartMsg] =
     useState("");
 
-  const [
-    relatedCartAdded,
-    setRelatedCartAdded,
-  ] = useState({});
 
   const [loginPrompt, setLoginPrompt] =
     useState(false);
@@ -2153,7 +3347,7 @@ export default function ProductDetailPage() {
   // ---------- RESET ON PRODUCT CHANGE ----------
 
   useEffect(() => {
-    setQuantity(product?.moq || 1);
+    setQuantity(1);
     setActiveImage(0);
     setActiveColor(0);
     setSelectedSize("");
@@ -2305,6 +3499,11 @@ export default function ProductDetailPage() {
     );
   }, [colorOptions, activeColor]);
 
+  const selectedColorValue =
+    getOptionValue(selectedColor) ||
+    getOptionName(selectedColor) ||
+    "";
+
   // ---------- AVAILABLE SIZES ----------
 
   const availableSizes = useMemo(() => {
@@ -2325,13 +3524,10 @@ export default function ProductDetailPage() {
      * selected, only show sizes available for
      * that colour.
      */
-    if (
-      product.variantsEnabled &&
-      variants.length > 0
-    ) {
+    if (variants.length > 0) {
       const filtered = variants
         .filter((variant) => {
-          if (!variant?.active) {
+          if (variant?.active === false) {
             return false;
           }
 
@@ -2410,151 +3606,244 @@ export default function ProductDetailPage() {
   const selectedVariant = useMemo(() => {
     if (!product) return null;
 
-    const variants =
-      Array.isArray(product.variants)
-        ? product.variants
-        : [];
+    const variants = Array.isArray(product?.variants)
+      ? product.variants.filter((variant) => variant?.active !== false)
+      : [];
 
-    if (
-      !product.variantsEnabled ||
-      variants.length === 0
-    ) {
-      return null;
-    }
+    if (!variants.length) return null;
 
-    /*
-     * A variant is only considered selected
-     * after all required options have been chosen.
-     */
-    const requiresColor =
-      colorOptions.length > 0;
+    const requiresColor = colorOptions.length > 0;
+    const requiresSize = availableSizes.length > 0;
 
-    const requiresSize =
-      availableSizes.length > 0;
+    if (requiresColor && !selectedColorValue) return null;
+    if (requiresSize && !selectedSize) return null;
 
-    if (
-      requiresColor &&
-      !selectedColor
-    ) {
-      return null;
-    }
+    const normalizeToken = (value) =>
+      String(value ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, "")
+        .replace(/[._-]+/g, "");
 
-    if (
-      requiresSize &&
-      !selectedSize
-    ) {
-      return null;
-    }
+    const matchesOption = (variantOption, selectedOption, selectedValue = "") => {
+      const variantTokens = [
+        getOptionName(variantOption),
+        getOptionValue(variantOption),
+        getOptionHex(variantOption),
+      ]
+        .map(normalizeToken)
+        .filter(Boolean);
 
-    return (
-      variants.find((variant) => {
-        if (!variant?.active) {
-          return false;
-        }
+      const selectedTokens = [
+        getOptionName(selectedOption),
+        getOptionValue(selectedOption),
+        getOptionHex(selectedOption),
+        selectedValue,
+      ]
+        .map(normalizeToken)
+        .filter(Boolean);
 
-        const colorMatches =
-          selectedColor
-            ? optionMatches(
-                variant.color ||
-                  {
-                    name:
-                      variant.colorName,
-                    value:
-                      variant.colorValue,
-                    hex:
-                      variant.colorHex,
-                  },
-                selectedColor
-              )
-            : true;
+      if (!variantTokens.length || !selectedTokens.length) {
+        return false;
+      }
 
-        const sizeMatches =
-          selectedSize
-            ? optionMatches(
-                variant.size ||
-                  {
-                    name:
-                      variant.sizeName,
-                    value:
-                      variant.sizeValue,
-                  },
-                selectedSize
-              )
-            : true;
+      return variantTokens.some((token) =>
+        selectedTokens.some((selectedToken) => token === selectedToken)
+      );
+    };
 
-        return (
-          colorMatches &&
-          sizeMatches
-        );
-      }) || null
-    );
+    const selected = variants.find((variant) => {
+      const colorMatches = requiresColor
+        ? matchesOption(
+            {
+              name: variant?.colorName,
+              value: variant?.colorValue,
+              hex: variant?.colorHex,
+            },
+            selectedColor,
+            selectedColorValue
+          )
+        : true;
+
+      const sizeMatches = requiresSize
+        ? matchesOption(
+            {
+              name: variant?.sizeName,
+              value: variant?.sizeValue,
+            },
+            selectedSize,
+            selectedSize
+          )
+        : true;
+
+      return colorMatches && sizeMatches;
+    });
+
+    return selected || null;
   }, [
     product,
-    colorOptions,
-    availableSizes,
+    colorOptions.length,
+    availableSizes.length,
     selectedColor,
+    selectedColorValue,
     selectedSize,
   ]);
 
   // ---------- PRICE ----------
 
+  const selectedColorData = useMemo(() => {
+    if (!product || !selectedColor) return null;
+
+    return (
+      (Array.isArray(product.colorOptions)
+        ? product.colorOptions
+        : []
+      ).find((color) =>
+        optionMatches(color, selectedColor)
+      ) || null
+    );
+  }, [product, selectedColor]);
+
+  const selectedSizePriceData = useMemo(() => {
+    if (!product || !selectedSize) return null;
+
+    const configured = Array.isArray(product?.sizeOptions)
+      ? product.sizeOptions
+      : [];
+
+    return (
+      configured.find((size) => {
+        const value = String(
+          size?.value ||
+            size?.name ||
+            ""
+        ).trim().toLowerCase();
+
+        return value === String(selectedSize).trim().toLowerCase();
+      }) || null
+    );
+  }, [product, selectedSize]);
+
   const displayPrice = useMemo(() => {
+    const regular =
+      selectedVariant?.regularPrice > 0
+        ? Number(selectedVariant.regularPrice)
+        : selectedColorData?.regularPrice > 0
+        ? Number(selectedColorData.regularPrice)
+        : selectedSizePriceData?.regularPrice > 0
+        ? Number(selectedSizePriceData.regularPrice)
+        : Number(product?.regularPrice ?? product?.price ?? 0) || 0;
+
+    const sale =
+      selectedVariant?.salePrice > 0
+        ? Number(selectedVariant.salePrice)
+        : selectedColorData?.salePrice > 0
+        ? Number(selectedColorData.salePrice)
+        : selectedSizePriceData?.salePrice > 0
+        ? Number(selectedSizePriceData.salePrice)
+        : Number(product?.salePrice ?? 0) || 0;
+
+    // Sale is applied ONLY when backend says the product is on sale.
     if (
-      selectedVariant
+      product?.showOnSale &&
+      sale > 0 &&
+      regular > sale
     ) {
-      const sale =
-        Number(
-          selectedVariant.salePrice
-        ) || 0;
+      return sale;
+    }
 
-      const regular =
-        Number(
-          selectedVariant.regularPrice
-        ) || 0;
+    return regular;
+  }, [
+    product,
+    selectedVariant,
+    selectedColorData,
+    selectedSizePriceData,
+  ]);
 
-      if (
-        sale > 0 &&
-        regular > sale
-      ) {
-        return sale;
-      }
+  const regularDisplayPrice = useMemo(() => {
+    if (
+      selectedVariant &&
+      Number(selectedVariant.regularPrice) > 0
+    ) {
+      return Number(selectedVariant.regularPrice);
+    }
 
-      return regular;
+    if (
+      selectedColorData &&
+      Number(selectedColorData.regularPrice) > 0
+    ) {
+      return Number(selectedColorData.regularPrice);
+    }
+
+    if (
+      selectedSizePriceData &&
+      Number(selectedSizePriceData.regularPrice) > 0
+    ) {
+      return Number(selectedSizePriceData.regularPrice);
     }
 
     return (
-      Number(product?.price) || 0
+      Number(
+        product?.regularPrice ??
+          product?.price ??
+          0
+      ) || 0
     );
   }, [
     product,
     selectedVariant,
+    selectedColorData,
+    selectedSizePriceData,
   ]);
 
-  const regularDisplayPrice =
-    useMemo(() => {
-      if (
-        selectedVariant &&
-        Number(
-          selectedVariant.regularPrice
-        ) > 0
-      ) {
-        return Number(
-          selectedVariant.regularPrice
-        );
-      }
-
-      return (
-        Number(product?.price) || 0
-      );
-    }, [
-      product,
-      selectedVariant,
-    ]);
-
   const hasSalePrice =
-    regularDisplayPrice >
-      displayPrice &&
+    Boolean(product?.showOnSale) &&
+    regularDisplayPrice > displayPrice &&
     displayPrice > 0;
+
+  const saleDiscountPercent =
+    hasSalePrice
+      ? Math.round(
+          ((regularDisplayPrice - displayPrice) /
+            regularDisplayPrice) *
+            100
+        )
+      : 0;
+
+  // Selected backend-configured size, including its details/shipping.
+  const selectedSizeData = useMemo(() => {
+    if (!selectedSize) return null;
+
+    const target = String(selectedSize).trim().toLowerCase();
+    const configured = Array.isArray(product?.sizeOptions) ? product.sizeOptions : [];
+    const configuredMatch = configured.find((size) =>
+      String(getOptionValue(size) || getOptionName(size) || "").trim().toLowerCase() === target
+    ) || null;
+
+    const variantSize = selectedVariant?.size || null;
+    const variantMatch =
+      variantSize &&
+      String(getOptionValue(variantSize) || getOptionName(variantSize) || "").trim().toLowerCase() === target
+        ? variantSize
+        : null;
+
+    const fallback = availableSizes.find((size) =>
+      String(getOptionValue(size) || getOptionName(size) || "").trim().toLowerCase() === target
+    ) || null;
+
+    return {
+      ...(variantMatch || {}),
+      ...(fallback || {}),
+      ...(configuredMatch || {}),
+      name: configuredMatch?.name || variantMatch?.name || fallback?.name || target,
+      value: configuredMatch?.value || variantMatch?.value || fallback?.value || target,
+      regularPrice: configuredMatch?.regularPrice ?? variantMatch?.regularPrice ?? fallback?.regularPrice ?? null,
+      salePrice: configuredMatch?.salePrice ?? variantMatch?.salePrice ?? fallback?.salePrice ?? null,
+      meters: configuredMatch?.meters ?? variantMatch?.meters ?? fallback?.meters ?? null,
+      shippingCharge: configuredMatch?.shippingCharge ?? variantMatch?.shippingCharge ?? fallback?.shippingCharge ?? null,
+      details: configuredMatch?.details || variantMatch?.details || fallback?.details || "",
+    };
+  }, [product, availableSizes, selectedSize, selectedVariant]);
 
   // ---------- ACTIVE IMAGE LIST ----------
 
@@ -2567,6 +3856,19 @@ export default function ProductDetailPage() {
       selectedVariant.images.length
     ) {
       return selectedVariant.images;
+    }
+
+    const selectedColorData =
+      Array.isArray(product?.colorOptions)
+        ? product.colorOptions.find((color) =>
+            optionMatches(color, selectedColor)
+          )
+        : null;
+
+    if (
+      selectedColorData?.images?.length
+    ) {
+      return selectedColorData.images;
     }
 
     return product?.images?.length
@@ -2608,6 +3910,49 @@ export default function ProductDetailPage() {
     selectedVariant
       ? availableStock <= 0
       : false;
+
+  // ---------- CART SYNC FOR CURRENT SELECTION ----------
+
+  const mainCartItem = useMemo(() => {
+    if (!product?.id) return null;
+
+    return (
+      items.find((item) =>
+        cartItemMatchesSelection(
+          item,
+          product.id,
+          selectedVariant?.id || "",
+          selectedColorValue,
+          selectedSize
+        )
+      ) || null
+    );
+  }, [
+    items,
+    product?.id,
+    selectedVariant?.id,
+    selectedColorValue,
+    selectedSize,
+  ]);
+
+  useEffect(() => {
+    if (
+      mainCartItem?.quantity
+    ) {
+      setQuantity(
+        Math.max(
+          1,
+          Number(
+            mainCartItem.quantity
+          )
+        )
+      );
+    }
+  }, [
+    mainCartItem?._id,
+    mainCartItem?.quantity,
+    product?.moq,
+  ]);
 
   // ---------- WISHLIST ----------
 
@@ -2663,17 +4008,65 @@ export default function ProductDetailPage() {
   // ---------- QUANTITY ----------
 
   const decreaseQuantity =
-    useCallback(() => {
+    useCallback(async () => {
+      if (mainCartItem?._id) {
+        const current =
+          Number(
+            mainCartItem.quantity || 1
+          );
+
+        if (current > 1) {
+          await updateQuantity(
+            mainCartItem._id,
+            current - 1
+          );
+        }
+
+        return;
+      }
+
       setQuantity((current) =>
         Math.max(
-          product?.moq || 1,
+          1,
           current - 1
         )
       );
-    }, [product]);
+    }, [
+      mainCartItem,
+      updateQuantity,
+      product,
+    ]);
 
   const increaseQuantity =
-    useCallback(() => {
+    useCallback(async () => {
+      if (mainCartItem?._id) {
+        const current =
+          Number(
+            mainCartItem.quantity || 1
+          );
+
+        const next =
+          selectedVariant &&
+          availableStock !== null
+            ? Math.min(
+                current + 1,
+                availableStock
+              )
+            : Math.min(
+                current + 1,
+                100
+              );
+
+        if (next > current) {
+          await updateQuantity(
+            mainCartItem._id,
+            next
+          );
+        }
+
+        return;
+      }
+
       setQuantity((current) => {
         const next =
           current + 1;
@@ -2694,6 +4087,8 @@ export default function ProductDetailPage() {
         );
       });
     }, [
+      mainCartItem,
+      updateQuantity,
       selectedVariant,
       availableStock,
     ]);
@@ -2715,7 +4110,9 @@ export default function ProductDetailPage() {
          * Variant validation
          */
         if (
-          product.variantsEnabled
+          product.variantsEnabled ||
+          colorOptions.length > 0 ||
+          availableSizes.length > 0
         ) {
           const requiresColor =
             colorOptions.length > 0;
@@ -2771,6 +4168,8 @@ export default function ProductDetailPage() {
           }
 
           if (
+            Array.isArray(product?.variants) &&
+            product.variants.length > 0 &&
             !selectedVariant &&
             (
               requiresColor ||
@@ -2815,7 +4214,7 @@ export default function ProductDetailPage() {
             Number(quantity) || 1,
             {
               selectedColor:
-                selectedColor || "",
+                selectedColorValue || "",
 
               selectedSize:
                 selectedSize || "",
@@ -2857,7 +4256,7 @@ export default function ProductDetailPage() {
         product,
         addToCart,
         quantity,
-        selectedColor,
+        selectedColorValue,
         selectedSize,
         selectedVariant,
         colorOptions,
@@ -2869,17 +4268,127 @@ export default function ProductDetailPage() {
 
   const handleBuyNow =
     useCallback(async () => {
+      if (!product?.id) {
+        setCartMsg("Product not found");
+        return;
+      }
+
+      if (
+          product.variantsEnabled ||
+          colorOptions.length > 0 ||
+          availableSizes.length > 0
+        ) {
+        const requiresColor =
+          colorOptions.length > 0;
+
+        const requiresSize =
+          availableSizes.length > 0;
+
+        if (
+          requiresColor &&
+          !selectedColor
+        ) {
+          setCartMsg(
+            "Please select a color."
+          );
+          return;
+        }
+
+        if (
+          requiresSize &&
+          !selectedSize
+        ) {
+          setCartMsg(
+            "Please select a size."
+          );
+          return;
+        }
+
+        if (
+          selectedVariant &&
+          Number(
+            selectedVariant.stock || 0
+          ) <= 0
+        ) {
+          setCartMsg(
+            "This variant is out of stock."
+          );
+          return;
+        }
+
+        if (
+            Array.isArray(product?.variants) &&
+            product.variants.length > 0 &&
+            !selectedVariant &&
+            (
+              requiresColor ||
+              requiresSize
+            )
+          ) {
+          setCartMsg(
+            "This color and size combination is unavailable."
+          );
+          return;
+        }
+
+        if (
+          selectedVariant &&
+          quantity >
+            Number(
+              selectedVariant.stock || 0
+            )
+        ) {
+          setCartMsg(
+            `Only ${selectedVariant.stock} units are available.`
+          );
+          return;
+        }
+      }
+
       const result =
-        await handleAddToCart();
+        await prepareBuyNow(
+          product,
+          Number(quantity) || 1,
+          {
+            selectedColor:
+              selectedColorValue || "",
+
+            selectedSize:
+              selectedSize || "",
+
+            variantId:
+              selectedVariant?.id ||
+              "",
+          }
+        );
+
+      if (
+        result?.loginRequired
+      ) {
+        setLoginPrompt(true);
+        return;
+      }
 
       if (
         result?.success
       ) {
-        window.location.href =
-          "/cart";
+        router.push(`/checkout?buyNowSessionId=${result?.sessionId || ""}`);
+      } else {
+        setCartMsg(
+          result?.message ||
+            "Unable to buy now"
+        );
       }
     }, [
-      handleAddToCart,
+      product,
+      quantity,
+      selectedColorValue,
+      selectedSize,
+      selectedVariant,
+      colorOptions,
+      availableSizes,
+      prepareBuyNow,
+      router,
     ]);
 
   // ---------- IMAGE NAVIGATION ----------
@@ -3027,11 +4536,9 @@ export default function ProductDetailPage() {
     product.sku ||
     "—";
 
-  const minQty =
-    Math.max(
-      1,
-      Number(product.moq || 1)
-    );
+  // MOQ is no longer used by the new product UI.
+  // Quantity always starts from 1; selling mode/size comes from backend.
+  const minQty = 1;
 
   const changeQty = (delta) => {
     setQuantity((current) => {
@@ -3057,85 +4564,6 @@ export default function ProductDetailPage() {
         100
       );
     });
-  };
-
-  // ---------- RELATED PRODUCT ACTIONS ----------
-
-  const handleRelatedSave = async (
-    item
-  ) => {
-    try {
-      await toggleSave(
-        String(item._id || item.id)
-      );
-    } catch (error) {
-      console.error(
-        "Related wishlist error:",
-        error
-      );
-    }
-  };
-
-  const handleRelatedCart = async (
-    item
-  ) => {
-    const id =
-      item?._id || item?.id;
-
-    if (!id) return;
-
-    try {
-      const result =
-        await addToCart(
-          String(id),
-          1,
-          {
-            selectedColor: "",
-            selectedSize: "",
-            variantId: "",
-          }
-        );
-
-      if (
-        result?.loginRequired
-      ) {
-        setLoginPrompt(true);
-        return;
-      }
-
-      if (result?.success) {
-        setRelatedCartAdded(
-          (current) => ({
-            ...current,
-            [id]: true,
-          })
-        );
-
-        window.setTimeout(() => {
-          setRelatedCartAdded(
-            (current) => {
-              const next = {
-                ...current,
-              };
-
-              delete next[id];
-
-              return next;
-            }
-          );
-        }, 2200);
-      } else {
-        console.error(
-          "Related cart error:",
-          result?.message
-        );
-      }
-    } catch (error) {
-      console.error(
-        "Related add to cart error:",
-        error
-      );
-    }
   };
 
   // ---------- CART ITEM CHECK ----------
@@ -3381,20 +4809,27 @@ export default function ProductDetailPage() {
               </span>
 
               {hasSalePrice && (
-                <span
-                  style={{
-                    color:
-                      "#9A938B",
-                    fontSize: 13,
-                    textDecoration:
-                      "line-through",
-                  }}
-                >
-                  ₹
-                  {
-                    regularDisplayPrice
-                  }
-                </span>
+                <>
+                  <span
+                    style={{
+                      color: "#9A938B",
+                      fontSize: 13,
+                      textDecoration: "line-through",
+                    }}
+                  >
+                    ₹{regularDisplayPrice}
+                  </span>
+
+                  <span
+                    style={{
+                      color: "#A17645",
+                      fontSize: 11,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {saleDiscountPercent}% OFF
+                  </span>
+                </>
               )}
 
               <span className="pd-price-unit">
@@ -3484,11 +4919,16 @@ export default function ProductDetailPage() {
 
                 <div className="pd-spec-copy">
                   <span className="pd-spec-label">
-                    MOQ
+                    {product.sellingMode === "meter"
+                      ? "FOLD LENGTH"
+                      : "SIZE DETAILS"}
                   </span>
 
                   <span className="pd-spec-value">
-                    {product.moq} Metres
+                    {product.sellingMode === "meter"
+                      ? product.meterConfig?.foldLength || "—"
+                      : selectedSizeData?.details ||
+                        "Select size"}
                   </span>
                 </div>
               </div>
@@ -3734,9 +5174,7 @@ export default function ProductDetailPage() {
 
                   <button
                     type="button"
-                    onClick={() =>
-                      changeQty(-1)
-                    }
+                    onClick={decreaseQuantity}
                     disabled={
                       quantity <= minQty
                     }
@@ -3751,9 +5189,7 @@ export default function ProductDetailPage() {
 
                   <button
                     type="button"
-                    onClick={() =>
-                      changeQty(1)
-                    }
+                    onClick={increaseQuantity}
                     disabled={
                       Boolean(
                         selectedVariant &&
@@ -3774,7 +5210,7 @@ export default function ProductDetailPage() {
                   productId={product.id}
                   quantity={quantity}
                   selectedColor={
-                    selectedColor
+                    selectedColorValue
                   }
                   selectedSize={
                     selectedSize
@@ -3792,8 +5228,8 @@ export default function ProductDetailPage() {
                 />
 
                 <span className="pd-min-order">
-                  Minimum order:{" "}
-                  {product.moq} Metres
+                  {product.bulkOrderNote ||
+                    "Contact us for bulk orders."}
                 </span>
 
               </div>
@@ -3985,12 +5421,60 @@ export default function ProductDetailPage() {
                   {product.composition}
                 </li>
 
-                <li>
-                  <strong>
-                    MOQ:
-                  </strong>{" "}
-                  {product.moq} Metres
-                </li>
+                {product.sellingMode === "meter" ? (
+                  <>
+                    <li>
+                      <strong>
+                        Fold Length:
+                      </strong>{" "}
+                      {product.meterConfig?.foldLength || "—"}
+                    </li>
+
+                    {availableSizes.length > 0 ? (
+                      <li>
+                        <strong>
+                          Meter Options:
+                        </strong>{" "}
+                        {availableSizes
+                          .map(
+                            (size) =>
+                              getOptionValue(size) ||
+                              getOptionName(size)
+                          )
+                          .filter(Boolean)
+                          .join(", ")}
+                      </li>
+                    ) : null}
+
+                    {selectedSizeData?.shippingCharge > 0 ? (
+                      <li>
+                        <strong>
+                          Shipping:
+                        </strong>{" "}
+                        ₹{selectedSizeData.shippingCharge}
+                      </li>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    <li>
+                      <strong>
+                        Size Details:
+                      </strong>{" "}
+                      {selectedSizeData?.details ||
+                        "Select a size"}
+                    </li>
+
+                    {selectedSizeData?.shippingCharge > 0 ? (
+                      <li>
+                        <strong>
+                          Shipping:
+                        </strong>{" "}
+                        ₹{selectedSizeData.shippingCharge}
+                      </li>
+                    ) : null}
+                  </>
+                )}
 
                 <li>
                   <strong>
@@ -4005,7 +5489,16 @@ export default function ProductDetailPage() {
                   </strong>{" "}
                   ₹{selectedPrice}{" "}
                   ({product.priceUnit})
-                </li>
+                </li> 
+
+                {product.bulkOrderNote ? (
+                  <li>
+                    <strong>
+                      Bulk Orders:
+                    </strong>{" "}
+                    {product.bulkOrderNote}
+                  </li>
+                ) : null}
 
               </ul>
             )}
@@ -4109,203 +5602,23 @@ export default function ProductDetailPage() {
 
         {/* RELATED PRODUCTS */}
 
-        {relatedProducts.length >
-          0 && (
+        {relatedProducts.length > 0 && (
           <section className="pd-related">
-
             <h2 className="pd-related-heading">
               You May Also Like
             </h2>
 
             <div className="pd-related-grid">
-
-              {relatedProducts.map(
-                (item) => {
-                  const itemId =
-                    String(
-                      item._id ||
-                        item.id
-                    );
-
-                  const added =
-                    Boolean(
-                      relatedCartAdded[
-                        itemId
-                      ]
-                    );
-
-                  const itemSaved =
-                    isSaved(
-                      itemId
-                    );
-
-                  return (
-                    <article
-                      key={itemId}
-                      className="pd-related-card"
-                    >
-
-                      <Link
-                        href={`/products/${item.slug}`}
-                        className="pd-related-image"
-                        aria-label={`View ${item.name}`}
-                      >
-                        <img
-                          src={
-                            item.images?.[
-                              0
-                            ] ||
-                            PLACEHOLDER_IMAGE
-                          }
-                          alt={
-                            item.name
-                          }
-                          loading="lazy"
-                          onError={
-                            handleImageError
-                          }
-                        />
-                      </Link>
-
-                      <button
-                        type="button"
-                        className={`pd-related-save ${
-                          itemSaved
-                            ? "is-saved"
-                            : ""
-                        }`}
-                        onClick={() =>
-                          handleRelatedSave(
-                            item
-                          )
-                        }
-                        aria-label={
-                          itemSaved
-                            ? "Remove from wishlist"
-                            : "Save product"
-                        }
-                        aria-pressed={
-                          itemSaved
-                        }
-                      >
-                        <Heart
-                          size={16}
-                          strokeWidth={1.9}
-                          fill={
-                            itemSaved
-                              ? "currentColor"
-                              : "none"
-                          }
-                        />
-                      </button>
-
-                      {item.badge && (
-                        <span className="pd-related-badge">
-                          {item.badge}
-                        </span>
-                      )}
-
-                      <Link
-                        href={`/products/${item.slug}`}
-                        className="pd-related-body"
-                      >
-                        <span className="pd-related-name">
-                          {item.name}
-                        </span>
-
-                        <span className="pd-related-meta">
-                          {item.gsm}
-                          {" | "}
-                          {item.width}
-                        </span>
-
-                        {item.colors?.length >
-                          0 && (
-                          <span className="pd-related-colors">
-                            {item.colors
-                              .slice(
-                                0,
-                                5
-                              )
-                              .map(
-                                (
-                                  color,
-                                  index
-                                ) => (
-                                  <span
-                                    key={`${itemId}-${index}`}
-                                    className="pd-related-color"
-                                    style={{
-                                      backgroundColor:
-                                        color,
-                                    }}
-                                  />
-                                )
-                              )}
-                          </span>
-                        )}
-
-                        <span className="pd-related-price">
-                          ₹{item.price}
-                        </span>
-                      </Link>
-
-                      <div
-                        style={{
-                          position:
-                            "absolute",
-                          right: 10,
-                          bottom: 10,
-                          zIndex: 8,
-                        }}
-                      >
-                        {added ? (
-                          <button
-                            type="button"
-                            className="pd-related-cart is-added"
-                            aria-label="Added to cart"
-                          >
-                            <span className="pd-related-cart-icon check-in">
-                              <Check
-                                size={17}
-                                strokeWidth={
-                                  2.5
-                                }
-                              />
-                            </span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="pd-related-cart"
-                            onClick={() =>
-                              handleRelatedCart(
-                                item
-                              )
-                            }
-                            aria-label="Add to cart"
-                          >
-                            <span className="pd-related-cart-icon cart-in">
-                              <ShoppingCart
-                                size={
-                                  17
-                                }
-                                strokeWidth={
-                                  2
-                                }
-                              />
-                            </span>
-                          </button>
-                        )}
-                      </div>
-
-                    </article>
-                  );
-                }
-              )}
-
+              {relatedProducts.map((item) => (
+                <SyncedRelatedProductCard
+                  key={String(item._id || item.id)}
+                  item={item}
+                  onLoginRequired={() => {
+                    setLoginPrompt(true);
+                  }}
+                />
+              ))}
             </div>
-
           </section>
         )}
 

@@ -216,6 +216,16 @@ export default function CartPage() {
 
         selectedSize,
 
+        sellingMode:
+          item?.sellingMode ||
+          snapshot?.sellingMode ||
+          "piece",
+
+        priceUnit:
+          item?.priceUnit ||
+          snapshot?.priceUnit ||
+          "",
+
         colorName,
 
         colorHex,
@@ -1485,7 +1495,10 @@ export default function CartPage() {
                           </span>
                         )}
 
-                        per meter
+                        {item.priceUnit ||
+                          (item.sellingMode === "meter"
+                            ? "per meter"
+                            : "per piece")}
 
                       </span>
 

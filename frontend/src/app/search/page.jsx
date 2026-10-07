@@ -150,7 +150,15 @@ function normalizeProduct(item) {
         const hex = getOptionHex(color) || "#D9D1C7";
         return [
           `${name.toLowerCase()}|${value.toLowerCase()}|${hex.toLowerCase()}`,
-          { index, name, value, hex },
+          {
+            index,
+            name,
+            value,
+            hex,
+            images: Array.isArray(color?.images)
+              ? color.images.map(imageValue).filter(Boolean)
+              : [],
+          },
         ];
       })
     ).values()
@@ -187,7 +195,19 @@ function normalizeProduct(item) {
       rawSizes.map((size, index) => {
         const name = getOptionName(size) || `Size ${index + 1}`;
         const value = getOptionValue(size) || name;
-        return [value.toLowerCase(), { index, name, value }];
+        return [
+          value.toLowerCase(),
+          {
+            index,
+            name,
+            value,
+            details: size?.details || "",
+            meters: size?.meters ?? null,
+            shippingCharge: size?.shippingCharge ?? null,
+            regularPrice: size?.regularPrice ?? null,
+            salePrice: size?.salePrice ?? null,
+          },
+        ];
       })
     ).values()
   );
@@ -232,6 +252,10 @@ function normalizeProduct(item) {
     sizeOptions,
     variants,
     variantsEnabled: Boolean(item?.variantsEnabled || variants.length),
+    sellingMode: item?.sellingMode === "meter" ? "meter" : "piece",
+    priceUnit:
+      item?.priceUnit ||
+      (item?.sellingMode === "meter" ? "Per Meter" : "Per Piece"),
   };
 }
 
@@ -435,13 +459,21 @@ function ProductCard({ product, onLoginRequired }) {
     product?.sku ||
     "—";
 
+  const selectedColorImages = Array.isArray(selectedColorOption?.images)
+    ? selectedColorOption.images
+        .map((image) => (typeof image === "string" ? image : image?.url))
+        .filter(Boolean)
+    : [];
+
   const displayImage =
     selectedVariant?.images?.[0] ||
+    selectedColorImages?.[0] ||
     product?.image ||
     "/images/home/products/1.png";
 
   const displayHoverImage =
     selectedVariant?.images?.[1] ||
+    selectedColorImages?.[1] ||
     product?.hoverImage ||
     displayImage;
 
@@ -792,7 +824,7 @@ function ProductCard({ product, onLoginRequired }) {
         {availableSizes.length > 0 ? (
           <div className="sr-option-block">
             <div className="sr-option-heading">
-              <span>SIZE</span>
+              <span>{product.sellingMode === "meter" ? "METER / LENGTH" : "SIZE"}</span>
               <strong>{selectedSize || "Select"}</strong>
             </div>
 
@@ -831,7 +863,7 @@ function ProductCard({ product, onLoginRequired }) {
           <div className="sr-action-area">
             <div className="sr-pieces-control">
               <span className="sr-pieces-label">
-                PIECES
+                {product.sellingMode === "meter" ? "QUANTITY" : "PIECES"}
               </span>
 
               <div className="sr-qty-control">

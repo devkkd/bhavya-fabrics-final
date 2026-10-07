@@ -1,6 +1,7 @@
 "use strict";
 
 const express = require("express");
+const mongoose = require("mongoose");
 
 const Product                = require("../models/Product");
 const SaleSetting            = require("../models/SaleSetting");
@@ -207,7 +208,16 @@ async function getSaleSetting() {
 }
 
 async function getActiveSaleProducts() {
-  return Product.find({ status: "published", showOnSale: true })
+  const now = new Date();
+  return Product.find({
+    status: "published",
+    showOnSale: true,
+    $or: [
+      { "saleManagement.expiresAt": null },
+      { "saleManagement.expiresAt": { $exists: false } },
+      { "saleManagement.expiresAt": { $gt: now } },
+    ],
+  })
     .populate("category",    "name slug")
     .populate("subCategory", "name slug")
     .sort({ createdAt: -1 })
@@ -671,6 +681,169 @@ router.get("/admin/subscribers", adminAuth, async (req, res) => {
 });
 
 /* =========================================================
+   PRODUCT-SALE MANAGEMENT HELPERS
+   IMPORTANT: These helpers only manage individual product sales.
+   The existing Sale Timer + Subscribe/Notify system above remains
+   untouched.
+========================================================= */
+
+function cleanPercent(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0 || n > 100) return null;
+  return Math.round(n * 100) / 100;
+}
+
+function roundMoney(value) {
+  return Math.round(Number(value || 0) * 100) / 100;
+}
+
+function salePriceFromPercent(actualPrice, percent) {
+  const price = Number(actualPrice || 0);
+  const discount = Number(percent || 0);
+  return roundMoney(price - (price * discount) / 100);
+}
+
+function snapshotSalePricing(product) {
+  return {
+    pricing: {
+      regularPrice: product?.pricing?.regularPrice ?? 0,
+      salePrice: product?.pricing?.salePrice ?? null,
+    },
+    colors: Array.isArray(product?.options?.colors)
+      ? product.options.colors.map((color) => ({
+          name: color?.name || "",
+          value: color?.value || "",
+          regularPrice: color?.regularPrice ?? null,
+          salePrice: color?.salePrice ?? null,
+        }))
+      : [],
+    variants: Array.isArray(product?.variants)
+      ? product.variants.map((variant) => ({
+          id: String(variant?._id || ""),
+          regularPrice: variant?.regularPrice ?? null,
+          salePrice: variant?.salePrice ?? null,
+        }))
+      : [],
+  };
+}
+
+function applyPercentSale(product, percent) {
+  const update = {
+    "pricing.salePrice": salePriceFromPercent(
+      product?.pricing?.regularPrice,
+      percent
+    ),
+  };
+
+  if (Array.isArray(product?.options?.colors)) {
+    update["options.colors"] = product.options.colors.map((color) => ({
+      ...color,
+      salePrice:
+        color?.regularPrice !== null && color?.regularPrice !== undefined
+          ? salePriceFromPercent(color.regularPrice, percent)
+          : null,
+    }));
+  }
+
+  if (Array.isArray(product?.variants)) {
+    update.variants = product.variants.map((variant) => ({
+      ...variant,
+      salePrice:
+        variant?.regularPrice !== null && variant?.regularPrice !== undefined
+          ? salePriceFromPercent(variant.regularPrice, percent)
+          : null,
+    }));
+  }
+
+  return update;
+}
+
+function normalizeExpiry({ durationDays, expiresAt }) {
+  if (expiresAt !== undefined && expiresAt !== null && expiresAt !== "") {
+    const parsed = new Date(expiresAt);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new Error("Invalid sale expiry date/time.");
+    }
+    if (parsed.getTime() <= Date.now()) {
+      throw new Error("Sale expiry must be in the future.");
+    }
+    return parsed;
+  }
+
+  if (durationDays !== undefined && durationDays !== null && durationDays !== "") {
+    const days = Number(durationDays);
+    if (!Number.isFinite(days) || days <= 0 || days > 3650) {
+      throw new Error("durationDays must be between 1 and 3650.");
+    }
+    return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+  }
+
+  return null;
+}
+
+async function enableProductSale(product, options = {}) {
+  const discountPercent = cleanPercent(options.discountPercent);
+  const expiry = normalizeExpiry(options);
+
+  const update = {
+    showOnSale: true,
+    "saleManagement.startsAt": new Date(),
+    "saleManagement.expiresAt": expiry,
+    "saleManagement.discountPercent": discountPercent,
+  };
+
+  /* Capture actual/current pricing only when a product enters a sale. */
+  if (!product.saleManagement?.pricingSnapshot) {
+    update["saleManagement.pricingSnapshot"] = snapshotSalePricing(product);
+  }
+
+  if (discountPercent !== null) {
+    Object.assign(update, applyPercentSale(product, discountPercent));
+  } else if (options.salePrice !== undefined) {
+    const salePrice =
+      options.salePrice === null || options.salePrice === ""
+        ? null
+        : Number(options.salePrice);
+
+    if (salePrice !== null && (!Number.isFinite(salePrice) || salePrice < 0)) {
+      throw new Error("salePrice must be a valid positive number or empty.");
+    }
+
+    update["pricing.salePrice"] = salePrice;
+  }
+
+  return update;
+}
+
+async function disableProductSale(product) {
+  const update = {
+    showOnSale: false,
+    "saleManagement.discountPercent": null,
+    "saleManagement.startsAt": null,
+    "saleManagement.expiresAt": null,
+    "saleManagement.pricingSnapshot": null,
+    "pricing.salePrice": null,
+  };
+
+  if (Array.isArray(product?.options?.colors)) {
+    update["options.colors"] = product.options.colors.map((color) => ({
+      ...color,
+      salePrice: null,
+    }));
+  }
+
+  if (Array.isArray(product?.variants)) {
+    update.variants = product.variants.map((variant) => ({
+      ...variant,
+      salePrice: null,
+    }));
+  }
+
+  return update;
+}
+
+/* =========================================================
    ADMIN — GET /api/sale/admin/catalog
 ========================================================= */
 
@@ -704,40 +877,67 @@ router.get("/admin/catalog", adminAuth, async (req, res) => {
 
 /* =========================================================
    ADMIN — PATCH /api/sale/admin/products/:id
-   Body: { showOnSale: boolean }
-   Auto-blast "sale is live" when first product goes ON
+
+   Body examples:
+   { "showOnSale": true, "discountPercent": 15, "durationDays": 10 }
+   { "showOnSale": true, "salePrice": 799 }
+   { "showOnSale": false }
+
+   IMPORTANT: This does NOT modify the Sale Timer or Subscribe system.
 ========================================================= */
 
 router.patch("/admin/products/:id", adminAuth, async (req, res) => {
   try {
-    const { id }        = req.params;
-    const { showOnSale } = req.body || {};
+    const { id } = req.params;
+    const body = req.body || {};
 
-    if (typeof showOnSale !== "boolean") {
-      return res.status(400).json({ success: false, message: "showOnSale must be a boolean value." });
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid product id." });
     }
 
-    const product = await Product.findByIdAndUpdate(
-      id,
-      { $set: { showOnSale } },
-      { new: true, runValidators: true }
-    )
-      .populate("category",    "name slug")
-      .populate("subCategory", "name slug");
-
+    const product = await Product.findById(id);
     if (!product) {
       return res.status(404).json({ success: false, message: "Product not found." });
     }
 
-    /* ── When first product goes live → blast "sale is live" email ── */
+    const showOnSale = body.showOnSale;
+    if (typeof showOnSale !== "boolean") {
+      return res.status(400).json({ success: false, message: "showOnSale must be a boolean value." });
+    }
+
+    const update = showOnSale
+      ? await enableProductSale(product, body)
+      : await disableProductSale(product);
+
+    const updated = await Product.findByIdAndUpdate(
+      id,
+      { $set: update },
+      { new: true, runValidators: true }
+    )
+      .populate("category", "name slug")
+      .populate("subCategory", "name slug");
+
     let blastResult = null;
     if (showOnSale) {
-      const activeCount = await Product.countDocuments({ status: "published", showOnSale: true });
+      const activeCount = await Product.countDocuments({
+        status: "published",
+        showOnSale: true,
+        $or: [
+          { "saleManagement.expiresAt": null },
+          { "saleManagement.expiresAt": { $exists: false } },
+          { "saleManagement.expiresAt": { $gt: new Date() } },
+        ],
+      });
+
+      /* Preserve the EXISTING live-sale notification behavior. */
       if (activeCount === 1) {
-        /* this is literally the first product going live */
         try {
           const setting = await getSaleSetting();
-          blastResult   = await blastSubscribers({ setting, emailType: "live", productCount: 1 });
+          blastResult = await blastSubscribers({
+            setting,
+            emailType: "live",
+            productCount: 1,
+          });
         } catch (blastErr) {
           console.error("Auto live-blast error:", blastErr);
         }
@@ -747,12 +947,167 @@ router.patch("/admin/products/:id", adminAuth, async (req, res) => {
     return res.json({
       success: true,
       message: showOnSale ? "Product added to sale." : "Product removed from sale.",
-      product,
+      product: updated,
       blast: blastResult,
     });
   } catch (error) {
     console.error("PATCH /api/sale/admin/products/:id error:", error);
-    return res.status(500).json({ success: false, message: "Failed to update sale product" });
+    return res.status(400).json({
+      success: false,
+      message: error.message || "Failed to update sale product",
+    });
+  }
+});
+
+/* =========================================================
+   ADMIN — POST /api/sale/admin/products/bulk-add
+
+   Body:
+   {
+     productIds: ["...", "..."],
+     discountPercent: 10,
+     durationDays: 3
+   }
+
+   discountPercent is optional. If omitted, existing/manual sale prices
+   are kept and the products are simply placed on sale.
+========================================================= */
+
+router.post("/admin/products/bulk-add", adminAuth, async (req, res) => {
+  try {
+    const productIds = Array.isArray(req.body?.productIds)
+      ? [...new Set(req.body.productIds.map(String))]
+      : [];
+
+    if (!productIds.length) {
+      return res.status(400).json({ success: false, message: "Select at least one product." });
+    }
+
+    if (productIds.some((id) => !mongoose.Types.ObjectId.isValid(id))) {
+      return res.status(400).json({ success: false, message: "One or more product IDs are invalid." });
+    }
+
+    const discountPercent = cleanPercent(req.body?.discountPercent);
+    if (req.body?.discountPercent !== undefined && discountPercent === null) {
+      return res.status(400).json({ success: false, message: "discountPercent must be between 0 and 100." });
+    }
+
+    const expiry = normalizeExpiry({
+      durationDays: req.body?.durationDays,
+      expiresAt: req.body?.expiresAt,
+    });
+
+    const products = await Product.find({
+      _id: { $in: productIds },
+      status: "published",
+    });
+
+    if (!products.length) {
+      return res.status(404).json({ success: false, message: "No published products found." });
+    }
+
+    const updatedProducts = [];
+
+    for (const product of products) {
+      const update = await enableProductSale(product, {
+        discountPercent,
+        expiresAt: expiry,
+      });
+
+      const updated = await Product.findByIdAndUpdate(
+        product._id,
+        { $set: update },
+        { new: true, runValidators: true }
+      ).lean();
+
+      updatedProducts.push(updated);
+    }
+
+    return res.json({
+      success: true,
+      message: `${updatedProducts.length} product${updatedProducts.length !== 1 ? "s" : ""} added to sale.`,
+      count: updatedProducts.length,
+      discountPercent,
+      expiresAt: expiry,
+      products: updatedProducts,
+    });
+  } catch (error) {
+    console.error("POST /api/sale/admin/products/bulk-add error:", error);
+    return res.status(400).json({
+      success: false,
+      message: error.message || "Failed to add products to sale",
+    });
+  }
+});
+
+/* =========================================================
+   ADMIN — POST /api/sale/admin/products/bulk-remove
+   Body: { productIds: [...] }
+========================================================= */
+
+router.post("/admin/products/bulk-remove", adminAuth, async (req, res) => {
+  try {
+    const productIds = Array.isArray(req.body?.productIds)
+      ? [...new Set(req.body.productIds.map(String))]
+      : [];
+
+    if (!productIds.length) {
+      return res.status(400).json({ success: false, message: "Select at least one sale product." });
+    }
+
+    if (productIds.some((id) => !mongoose.Types.ObjectId.isValid(id))) {
+      return res.status(400).json({ success: false, message: "One or more product IDs are invalid." });
+    }
+
+    const products = await Product.find({
+      _id: { $in: productIds },
+      showOnSale: true,
+    });
+
+    for (const product of products) {
+      await Product.findByIdAndUpdate(
+        product._id,
+        { $set: await disableProductSale(product) },
+        { runValidators: true }
+      );
+    }
+
+    return res.json({
+      success: true,
+      message: `${products.length} product${products.length !== 1 ? "s" : ""} removed from sale.`,
+      count: products.length,
+    });
+  } catch (error) {
+    console.error("POST /api/sale/admin/products/bulk-remove error:", error);
+    return res.status(500).json({ success: false, message: "Failed to remove products from sale" });
+  }
+});
+
+/* =========================================================
+   ADMIN — POST /api/sale/admin/products/remove-all
+   Removes every product currently on sale.
+========================================================= */
+
+router.post("/admin/products/remove-all", adminAuth, async (req, res) => {
+  try {
+    const products = await Product.find({ showOnSale: true });
+
+    for (const product of products) {
+      await Product.findByIdAndUpdate(
+        product._id,
+        { $set: await disableProductSale(product) },
+        { runValidators: true }
+      );
+    }
+
+    return res.json({
+      success: true,
+      message: `${products.length} sale product${products.length !== 1 ? "s" : ""} removed from sale.`,
+      count: products.length,
+    });
+  } catch (error) {
+    console.error("POST /api/sale/admin/products/remove-all error:", error);
+    return res.status(500).json({ success: false, message: "Failed to remove all sale products" });
   }
 });
 

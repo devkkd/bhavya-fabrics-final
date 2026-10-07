@@ -84,6 +84,19 @@ function normalizeColorOption(value) {
     name: name || optionValue,
     value: optionValue || name,
     hex: hex || optionValue || name,
+    images: Array.isArray(value?.images)
+      ? value.images.map(imageValue).filter(Boolean)
+      : [],
+    regularPrice:
+      value?.regularPrice !== null &&
+      value?.regularPrice !== undefined
+        ? Number(value.regularPrice)
+        : null,
+    salePrice:
+      value?.salePrice !== null &&
+      value?.salePrice !== undefined
+        ? Number(value.salePrice)
+        : null,
   };
 }
 
@@ -101,6 +114,11 @@ function normalizeSizeOption(value) {
   return {
     name,
     value: String(value?.value || value?.name || "").trim() || name,
+    details: value?.details || value?.description || "",
+    meters: value?.meters ?? null,
+    shippingCharge: value?.shippingCharge ?? null,
+    regularPrice: value?.regularPrice ?? null,
+    salePrice: value?.salePrice ?? null,
   };
 }
 
@@ -290,7 +308,12 @@ function normalizeProduct(item) {
     regularPrice,
     salePrice: hasSale ? salePrice : 0,
 
-    priceUnit: item?.priceUnit || item?.pricing?.unit || "Per Meter",
+    priceUnit:
+      item?.priceUnit ||
+      item?.pricing?.unit ||
+      (item?.sellingMode === "meter" ? "Per Meter" : "Per Piece"),
+
+    sellingMode: item?.sellingMode === "meter" ? "meter" : "piece",
 
     badge:
       item?.badge ||
@@ -1173,12 +1196,28 @@ export default function NewArrivalsPage() {
               const displayPricing = getDisplayPricing(product);
               const selectedVariant = displayPricing.variant;
 
-              const firstImage = product.images?.[0] || FALLBACK_IMAGE;
+              const selectedColorImages = Array.isArray(selectedColor?.images)
+                ? selectedColor.images
+                    .map((image) => (typeof image === "string" ? image : image?.url))
+                    .filter(Boolean)
+                : [];
+
+              const variantImages = Array.isArray(selectedVariant?.images)
+                ? selectedVariant.images
+                : [];
+
+              const firstImage =
+                variantImages[0] ||
+                selectedColorImages[0] ||
+                product.images?.[0] ||
+                FALLBACK_IMAGE;
 
               const secondImage =
-                product.images?.[1] && product.images[1] !== firstImage
+                variantImages[1] ||
+                selectedColorImages[1] ||
+                (product.images?.[1] && product.images[1] !== firstImage
                   ? product.images[1]
-                  : null;
+                  : null);
 
               const showSecondImage = Boolean(
                 secondImage &&

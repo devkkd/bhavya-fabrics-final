@@ -139,6 +139,50 @@ function relationLabel(value) {
   return String(value);
 }
 
+function relationCandidates(...values) {
+  const candidates = [];
+
+  const add = (value) => {
+    if (value === null || value === undefined || value === "") {
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach(add);
+      return;
+    }
+
+    if (typeof value === "object") {
+      add(value?.slug);
+      add(value?.id);
+      add(value?._id);
+      add(value?.name);
+      add(value?.label);
+      add(value?.title);
+      add(value?.category);
+      add(value?.subcategory);
+      add(value?.categorySlug);
+      add(value?.subcategorySlug);
+      return;
+    }
+
+    const raw = String(value).trim();
+    if (!raw) return;
+
+    const normalized = slugify(raw);
+    if (normalized) {
+      candidates.push(normalized);
+    }
+
+    // Keep raw lowercase too for IDs/legacy values that are not slug-like.
+    candidates.push(raw.toLowerCase());
+  };
+
+  values.forEach(add);
+
+  return [...new Set(candidates.filter(Boolean))];
+}
+
 function imageValue(value) {
   if (!value) {
     return "";
@@ -211,6 +255,21 @@ function normalizeColorOption(value) {
     name: name || rawValue,
     value: rawValue || name,
     hex: hex || rawValue || name,
+    regularPrice:
+      value?.regularPrice !== null &&
+      value?.regularPrice !== undefined
+        ? Number(value.regularPrice)
+        : null,
+    salePrice:
+      value?.salePrice !== null &&
+      value?.salePrice !== undefined
+        ? Number(value.salePrice)
+        : null,
+    images: Array.isArray(value?.images)
+      ? value.images
+          .map(imageValue)
+          .filter(Boolean)
+      : [],
   };
 }
 
@@ -240,6 +299,30 @@ function normalizeSizeOption(value) {
   return {
     name: name || rawValue,
     value: rawValue || name,
+    details:
+      value?.details ||
+      value?.description ||
+      "",
+    shippingCharge:
+      value?.shippingCharge !== null &&
+      value?.shippingCharge !== undefined
+        ? Number(value.shippingCharge)
+        : null,
+    meters:
+      value?.meters !== null &&
+      value?.meters !== undefined
+        ? Number(value.meters)
+        : null,
+    regularPrice:
+      value?.regularPrice !== null &&
+      value?.regularPrice !== undefined
+        ? Number(value.regularPrice)
+        : null,
+    salePrice:
+      value?.salePrice !== null &&
+      value?.salePrice !== undefined
+        ? Number(value.salePrice)
+        : null,
   };
 }
 
@@ -278,6 +361,11 @@ function normalizeVariant(value) {
     stock:
       Number(value?.stock ?? 0) || 0,
     sku: value?.sku || "",
+    images: Array.isArray(value?.images)
+      ? value.images
+          .map(imageValue)
+          .filter(Boolean)
+      : [],
     active: value?.active !== false,
   };
 }
@@ -729,6 +817,19 @@ function normalizeProduct(item) {
       category ||
       "",
 
+    categoryKeys: relationCandidates(
+      category,
+      item?.category,
+      item?.categorySlug,
+      item?.categoryId,
+      item?.categoryName,
+      categoryObject?.slug,
+      categoryObject?.name,
+      categoryObject?.label,
+      categoryObject?._id,
+      categoryObject?.id
+    ),
+
     subcategory:
       subcategoryKey,
 
@@ -736,7 +837,25 @@ function normalizeProduct(item) {
       subcategoryObject?.name ||
       subcategoryObject?.label ||
       item?.subcategoryName ||
+      item?.subCategoryName ||
       "",
+
+    subcategoryKeys: relationCandidates(
+      subcategory,
+      item?.subcategory,
+      item?.subcategorySlug,
+      item?.subcategoryId,
+      item?.subcategoryName,
+      item?.subCategory,
+      item?.subCategorySlug,
+      item?.subCategoryId,
+      item?.subCategoryName,
+      subcategoryObject?.slug,
+      subcategoryObject?.name,
+      subcategoryObject?.label,
+      subcategoryObject?._id,
+      subcategoryObject?.id
+    ),
 
     type: slugify(pattern),
 
@@ -754,7 +873,14 @@ function normalizeProduct(item) {
     priceUnit:
       item?.priceUnit ||
       item?.pricing?.unit ||
-      "Per Meter",
+      (item?.sellingMode === "meter"
+        ? "Per Meter"
+        : "Per Piece"),
+
+    sellingMode:
+      item?.sellingMode === "meter"
+        ? "meter"
+        : "piece",
 
     badge:
       item?.badge ||
@@ -1406,20 +1532,29 @@ function CollectionPageContent() {
      ACTIVE CATEGORY
   =================================================== */
 
+  const routeCategoryKeys =
+    relationCandidates(categoryId);
+
+  const findCategoryForRoute =
+    (list) =>
+      list.find((category) =>
+        relationCandidates(
+          category?.id,
+          category?.slug,
+          category?.mongoId,
+          category?.label,
+          category?.name
+        ).some((key) =>
+          routeCategoryKeys.includes(key)
+        )
+      );
+
   const activeCategory =
-    safeCategories.find(
-      (category) =>
-        slugify(category.id) ===
-          slugify(categoryId) ||
-        slugify(category.slug) ===
-          slugify(categoryId)
+    findCategoryForRoute(
+      safeCategories
     ) ||
-    DUMMY_CATEGORIES.find(
-      (category) =>
-        slugify(category.id) ===
-          slugify(categoryId) ||
-        slugify(category.slug) ===
-          slugify(categoryId)
+    findCategoryForRoute(
+      DUMMY_CATEGORIES
     ) ||
     {
       id: categoryId,
@@ -1467,43 +1602,85 @@ function CollectionPageContent() {
 
   const filteredProducts =
     useMemo(() => {
+      const currentCategoryKeys =
+        relationCandidates(
+          activeCategory?.slug,
+          activeCategory?.id,
+          activeCategory?.mongoId,
+          activeCategory?.label,
+          activeCategory?.name
+        );
+
       return safeProducts.filter(
         (product) => {
-          /* ---------- Category ---------- */
+          /* -------------------------------------------------
+             CATEGORY
+             Match slug + name + Mongo id + legacy fields.
+             A product belongs to the selected category if
+             ANY of its known category identifiers matches.
+          ------------------------------------------------- */
 
-          const productCategory =
-            slugify(
-              product?.category
+          const productCategoryKeys =
+            relationCandidates(
+              ...(Array.isArray(product?.categoryKeys)
+                ? product.categoryKeys
+                : []),
+              product?.category,
+              product?.categorySlug,
+              product?.categoryId,
+              product?.categoryName
             );
 
-          const currentCategory =
-            slugify(
-              activeCategory?.slug ||
-                activeCategory?.id
+          const categoryMatches =
+            currentCategoryKeys.length === 0 ||
+            productCategoryKeys.some(
+              (key) =>
+                currentCategoryKeys.includes(key)
             );
 
-          if (
-            productCategory &&
-            productCategory !==
-              currentCategory
-          ) {
+          if (!categoryMatches) {
             return false;
           }
 
-          /* ---------- Subcategory ---------- */
+          /* -------------------------------------------------
+             SUBCATEGORY
+             First category must match. Then, when a
+             subcategory is selected, require the product's
+             subcategory identifiers to match it.
+          ------------------------------------------------- */
 
-          if (
-            activeSubcategoryKey
-          ) {
-            const productSubcategory =
-              slugify(
-                product?.subcategory
+          if (activeSubcategoryKey) {
+            const selectedSubcategoryKeys =
+              relationCandidates(
+                activeSubcategoryKey
               );
 
-            if (
-              productSubcategory !==
-              activeSubcategoryKey
-            ) {
+            const productSubcategoryKeys =
+              relationCandidates(
+                ...(Array.isArray(
+                  product?.subcategoryKeys
+                )
+                  ? product.subcategoryKeys
+                  : []),
+                product?.subcategory,
+                product?.subcategorySlug,
+                product?.subcategoryId,
+                product?.subcategoryName,
+                product?.subCategory,
+                product?.subCategorySlug,
+                product?.subCategoryId,
+                product?.subCategoryName
+              );
+
+            const subcategoryMatches =
+              selectedSubcategoryKeys.some(
+                (key) =>
+                  productSubcategoryKeys.includes(
+                    key
+                  )
+              );
+
+            if (!subcategoryMatches) {
               return false;
             }
           }
@@ -1515,6 +1692,9 @@ function CollectionPageContent() {
       safeProducts,
       activeCategory?.id,
       activeCategory?.slug,
+      activeCategory?.mongoId,
+      activeCategory?.label,
+      activeCategory?.name,
       activeSubcategoryKey,
     ]);
 
@@ -1697,15 +1877,12 @@ function CollectionPageContent() {
 
   const showSecondImage =
     (product) => {
+      const images = getDisplayImages(product);
       return (
-        hoveredProduct ===
-          product.id &&
-        Array.isArray(
-          product.images
-        ) &&
-        product.images.length >
-          1 &&
-        product.images[1]
+        hoveredProduct === product.id &&
+        Array.isArray(images) &&
+        images.length > 1 &&
+        images[1]
       );
     };
 
@@ -1988,6 +2165,31 @@ function CollectionPageContent() {
     return (
       Number(product?.price || 0)
     );
+  };
+
+  const getDisplayImages = (product) => {
+    const variant = getSelectedVariant(product);
+
+    if (Array.isArray(variant?.images) && variant.images.length > 0) {
+      return variant.images;
+    }
+
+    const selectedColor = getSelectedColor(product);
+    const colorImages = Array.isArray(selectedColor?.images)
+      ? selectedColor.images
+          .map((image) =>
+            typeof image === "string" ? image : image?.url
+          )
+          .filter(Boolean)
+      : [];
+
+    if (colorImages.length > 0) {
+      return colorImages;
+    }
+
+    return Array.isArray(product?.images) && product.images.length > 0
+      ? product.images
+      : ["/images/home/products/1.png"];
   };
 
   const setCardMessage = (
@@ -5419,12 +5621,15 @@ function CollectionPageContent() {
                       ] ===
                       "added";
 
+                    const cardImages =
+                      getDisplayImages(product);
+
                     const primaryImage =
-                      product.images?.[0] ||
+                      cardImages?.[0] ||
                       "/images/home/products/1.png";
 
                     const secondaryImage =
-                      product.images?.[1];
+                      cardImages?.[1];
 
                     return (
                       <article

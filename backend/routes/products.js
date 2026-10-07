@@ -16,6 +16,207 @@ const router = express.Router();
 
 /*
 |--------------------------------------------------------------------------
+| Normalize product variants/specifications
+|--------------------------------------------------------------------------
+| Keeps legacy frontend payloads compatible:
+| - color/size may arrive as strings or objects
+| - size is optional
+| - duplicate color + size combinations are removed
+| - blank specification rows are removed
+|--------------------------------------------------------------------------
+*/
+const normalizeOption = (option, type = "color") => {
+  if (option === null || option === undefined) return undefined;
+
+  if (typeof option === "string") {
+    const name = option.trim();
+    if (!name) return undefined;
+    return type === "color"
+      ? { name, value: name }
+      : { name };
+  }
+
+  if (typeof option === "object") {
+    const name = String(
+      option.name ?? option.label ?? option.value ?? ""
+    ).trim();
+
+    if (!name) return undefined;
+
+    if (type === "color") {
+      const value = String(
+        option.value ?? option.name ?? option.label ?? ""
+      ).trim();
+
+      const hex = String(option.hex ?? "").trim();
+
+      return {
+        name,
+        value: value || name,
+        hex,
+        isCustom: Boolean(option.isCustom),
+        regularPrice:
+          option.regularPrice === "" ||
+          option.regularPrice === null ||
+          option.regularPrice === undefined
+            ? null
+            : Number(option.regularPrice),
+        salePrice:
+          option.salePrice === "" ||
+          option.salePrice === null ||
+          option.salePrice === undefined
+            ? null
+            : Number(option.salePrice),
+        images: Array.isArray(option.images) ? option.images : [],
+      };
+    }
+
+    return {
+      name,
+      isCustom: Boolean(option.isCustom),
+      details: String(option.details ?? "").trim(),
+      regularPrice:
+        option.regularPrice === "" ||
+        option.regularPrice === null ||
+        option.regularPrice === undefined
+          ? null
+          : Number(option.regularPrice),
+      salePrice:
+        option.salePrice === "" ||
+        option.salePrice === null ||
+        option.salePrice === undefined
+          ? null
+          : Number(option.salePrice),
+      shippingCharge:
+        option.shippingCharge === "" ||
+        option.shippingCharge === null ||
+        option.shippingCharge === undefined
+          ? null
+          : Number(option.shippingCharge),
+      meters:
+        option.meters === "" ||
+        option.meters === null ||
+        option.meters === undefined
+          ? null
+          : Number(option.meters),
+    };
+  }
+
+  return undefined;
+};
+
+const normalizeProductPayload = (body = {}) => {
+  const payload = { ...body };
+
+  if (Array.isArray(body.variants)) {
+    const seen = new Set();
+
+    payload.variants = body.variants
+      .map((rawVariant) => {
+        if (!rawVariant || typeof rawVariant !== "object") return null;
+
+        const color = normalizeOption(rawVariant.color, "color");
+        const size = normalizeOption(rawVariant.size, "size");
+
+        /*
+         * Also support the flattened format used by older frontend builds.
+         */
+        const fallbackColor =
+          color ||
+          normalizeOption(
+            rawVariant.colorName ||
+              rawVariant.colorValue ||
+              rawVariant.colorHex,
+            "color"
+          );
+
+        const fallbackSize =
+          size ||
+          normalizeOption(
+            rawVariant.sizeName || rawVariant.sizeValue,
+            "size"
+          );
+
+        const normalized = {
+          ...rawVariant,
+          color: fallbackColor,
+          size: fallbackSize,
+          images:
+            Array.isArray(rawVariant.images) && rawVariant.images.length
+              ? rawVariant.images
+              : Array.isArray(fallbackColor?.images)
+                ? fallbackColor.images
+                : [],
+        };
+
+        /*
+         * A variant must have at least one real option.
+         * Empty placeholder rows are not useful and can trigger
+         * required-field validation errors elsewhere.
+         */
+        if (!normalized.color && !normalized.size) return null;
+
+        const colorKey = String(
+          normalized.color?.name ||
+            normalized.color?.value ||
+            ""
+        )
+          .trim()
+          .toLowerCase();
+
+        const sizeKey = String(
+          normalized.size?.name ||
+            ""
+        )
+          .trim()
+          .toLowerCase();
+
+        const key = `${colorKey}__${sizeKey}`;
+
+        if (seen.has(key)) return null;
+
+        seen.add(key);
+        return normalized;
+      })
+      .filter(Boolean);
+  }
+
+  if (Array.isArray(body.specifications)) {
+    payload.specifications = body.specifications
+      .map((spec) => ({
+        name: String(
+          spec?.name ?? spec?.label ?? ""
+        ).trim(),
+        value: String(
+          spec?.value ?? spec?.text ?? ""
+        ).trim(),
+      }))
+      .filter((spec) => spec.name && spec.value);
+  }
+
+  if (body.options && typeof body.options === "object") {
+    payload.options = {
+      ...body.options,
+      colors: Array.isArray(body.options.colors)
+        ? body.options.colors
+            .map((color) => normalizeOption(color, "color"))
+            .filter(Boolean)
+        : [],
+      sizes: Array.isArray(body.options.sizes)
+        ? body.options.sizes
+            .map((size) => normalizeOption(size, "size"))
+            .filter(Boolean)
+        : [],
+    };
+  }
+
+  return payload;
+};
+
+
+
+/*
+|--------------------------------------------------------------------------
 | Slug Helper
 |--------------------------------------------------------------------------
 */
@@ -549,7 +750,7 @@ router.post(
   async (req, res) => {
     try {
       const body =
-        req.body || {};
+        normalizeProductPayload(req.body || {});
 
       /*
       |--------------------------------------------------------------------------
@@ -744,7 +945,7 @@ router.put(
       }
 
       const body =
-        req.body || {};
+        normalizeProductPayload(req.body || {});
 
       /*
       |--------------------------------------------------------------------------

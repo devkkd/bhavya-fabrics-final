@@ -23,6 +23,7 @@ import {
   X,
   ChevronRight,
   UserRound,
+  ImageIcon,
   CheckSquare
 } from "lucide-react";
 
@@ -34,6 +35,11 @@ const navItems = [
     label: "Dashboard",
     href: "/admin/dashboard",
     icon: LayoutDashboard
+  },
+   {
+    label: "Hero Section",
+    href: "/admin/hero",
+    icon: ImageIcon
   },
   {
     label: "Categories",

@@ -58,6 +58,19 @@ const EMPTY_PRODUCT = {
 
   gallery: [],
 
+  sellingMode: "piece",
+  bulkOrderNote: "Contact us for bulk orders.",
+
+  meterConfig: {
+    enabled: false,
+    foldLength: "",
+    minMeters: "",
+    maxMeters: "",
+    incrementMeters: "",
+  },
+
+  shippingRules: [],
+
   pricing: {
     regularPrice: "",
     salePrice: "",
@@ -132,6 +145,12 @@ function cloneEmptyProduct() {
     pricing: {
       ...EMPTY_PRODUCT.pricing,
     },
+
+    meterConfig: {
+      ...EMPTY_PRODUCT.meterConfig,
+    },
+
+    shippingRules: [],
 
     options: {
       colors: [],
@@ -499,6 +518,7 @@ export default function ProductsPage() {
       basic: true,
       images: true,
       pricing: true,
+      selling: true,
       variants: true,
       inventory: true,
       details: false,
@@ -859,6 +879,7 @@ export default function ProductsPage() {
       basic: true,
       images: true,
       pricing: true,
+      selling: true,
       variants: true,
       inventory: true,
       details: false,
@@ -927,6 +948,32 @@ export default function ProductsPage() {
         ...(product?.pricing ||
           {}),
       },
+
+      sellingMode:
+        product?.sellingMode ||
+        "piece",
+
+      bulkOrderNote:
+        product?.bulkOrderNote ||
+        "Contact us for bulk orders.",
+
+      meterConfig: {
+        ...EMPTY_PRODUCT.meterConfig,
+        ...(product?.meterConfig ||
+          {}),
+      },
+
+      shippingRules:
+        Array.isArray(
+          product?.shippingRules
+        )
+          ? product.shippingRules.map((rule, index) => ({
+              ...rule,
+              _uiId:
+                rule?._uiId ||
+                createId(`shipping-${index}`),
+            }))
+          : [],
 
       options: {
         colors:
@@ -1059,6 +1106,7 @@ export default function ProductsPage() {
       basic: true,
       images: true,
       pricing: true,
+      selling: true,
       variants: true,
       inventory: true,
       details: true,
@@ -1454,6 +1502,9 @@ export default function ProductsPage() {
 
               value: "",
               hex: "",
+              regularPrice: "",
+              salePrice: "",
+              images: [],
 
               isCustom: custom,
             },
@@ -1519,6 +1570,105 @@ export default function ProductsPage() {
     );
   };
 
+  const uploadColorImages = async (index, files) => {
+    const selectedFiles = Array.from(files || []).filter(Boolean);
+    if (!selectedFiles.length) return;
+
+    try {
+      setUploadingGallery(true);
+      setError("");
+
+      const uploaded = [];
+      for (const file of selectedFiles) {
+        const image = await uploadImage(file, "product");
+        uploaded.push({
+          ...image,
+          _uiId: createId("color-image"),
+        });
+      }
+
+      setForm((prev) => ({
+        ...prev,
+        options: {
+          ...prev.options,
+          colors: prev.options.colors.map((color, colorIndex) =>
+            colorIndex === index
+              ? {
+                  ...color,
+                  images: [
+                    ...(Array.isArray(color.images) ? color.images : []),
+                    ...uploaded,
+                  ],
+                }
+              : color
+          ),
+        },
+      }));
+
+      showSuccess(`${uploaded.length} colour image${uploaded.length !== 1 ? "s" : ""} uploaded`);
+    } catch (uploadError) {
+      setError(uploadError?.message || "Colour image upload failed");
+    } finally {
+      setUploadingGallery(false);
+    }
+  };
+
+  const removeColorImage = (colorIndex, imageIndex) => {
+    setForm((prev) => ({
+      ...prev,
+      options: {
+        ...prev.options,
+        colors: prev.options.colors.map((color, index) =>
+          index === colorIndex
+            ? {
+                ...color,
+                images: (color.images || []).filter(
+                  (_, currentIndex) => currentIndex !== imageIndex
+                ),
+              }
+            : color
+        ),
+      },
+    }));
+  };
+
+  const updateShippingRule = (index, key, value) => {
+    setForm((prev) => ({
+      ...prev,
+      shippingRules: (prev.shippingRules || []).map((rule, ruleIndex) =>
+        ruleIndex === index ? { ...rule, [key]: value } : rule
+      ),
+    }));
+  };
+
+  const addShippingRule = (type = "size") => {
+    setForm((prev) => ({
+      ...prev,
+      shippingRules: [
+        ...(prev.shippingRules || []),
+        {
+          _uiId: createId("shipping"),
+          type,
+          label: "",
+          sizeName: "",
+          minMeters: "",
+          maxMeters: "",
+          standardCharge: "",
+          expressCharge: "",
+        },
+      ],
+    }));
+  };
+
+  const removeShippingRule = (index) => {
+    setForm((prev) => ({
+      ...prev,
+      shippingRules: (prev.shippingRules || []).filter(
+        (_, ruleIndex) => ruleIndex !== index
+      ),
+    }));
+  };
+
   /* ===================================================
      SIZES
   =================================================== */
@@ -1548,6 +1698,12 @@ export default function ProductsPage() {
                 : "M",
 
               isCustom: custom,
+              details: "",
+              shippingCharge: "",
+              meters:
+                form.sellingMode === "meter"
+                  ? ""
+                  : null,
             },
           ],
         },
@@ -1557,27 +1713,24 @@ export default function ProductsPage() {
 
   const updateSize = (
     index,
+    key,
     value
   ) => {
     setForm(
       (prev) => ({
         ...prev,
-
         options: {
           ...prev.options,
-
           sizes:
             prev.options.sizes.map(
               (
                 size,
                 sizeIndex
               ) =>
-                sizeIndex ===
-                index
+                sizeIndex === index
                   ? {
                       ...size,
-                      name:
-                        value,
+                      [key]: value,
                     }
                   : size
             ),
@@ -1613,6 +1766,148 @@ export default function ProductsPage() {
   /* ===================================================
      VARIANTS
   =================================================== */
+
+  const generateVariants = () => {
+    const colors = Array.isArray(form.options?.colors)
+      ? form.options.colors.filter((color) => color?.name?.trim())
+      : [];
+
+    const sizes = Array.isArray(form.options?.sizes)
+      ? form.options.sizes.filter((size) => size?.name?.trim())
+      : [];
+
+    if (!colors.length && !sizes.length) {
+      setError("Add at least one colour or size first.");
+      return;
+    }
+
+    const existing = new Map(
+      (form.variants || []).map((variant) => {
+        const colorKey = String(
+          variant?.color?.name ||
+            variant?.color?.value ||
+            ""
+        ).trim().toLowerCase();
+
+        const sizeKey = String(
+          variant?.size?.name ||
+            variant?.size?.value ||
+            ""
+        ).trim().toLowerCase();
+
+        return [`${colorKey}__${sizeKey}`, variant];
+      })
+    );
+
+    const generated = [];
+
+    if (colors.length && sizes.length) {
+      colors.forEach((color) => {
+        sizes.forEach((size) => {
+          const key =
+            `${String(color.name).trim().toLowerCase()}__` +
+            `${String(size.name).trim().toLowerCase()}`;
+
+          const old = existing.get(key);
+
+          generated.push({
+            ...(old || {}),
+            _uiId: old?._uiId || createId("variant"),
+            color: { ...color },
+            size: { ...size },
+            regularPrice:
+              old?.regularPrice ??
+              color?.regularPrice ??
+              size?.regularPrice ??
+              null,
+            salePrice:
+              old?.salePrice ??
+              color?.salePrice ??
+              size?.salePrice ??
+              null,
+            stock: old?.stock ?? 1,
+            sku: old?.sku || "",
+            images:
+              Array.isArray(old?.images) && old.images.length
+                ? old.images
+                : Array.isArray(color?.images)
+                  ? color.images
+                  : [],
+            active: old?.active !== false,
+          });
+        });
+      });
+    } else if (colors.length) {
+      colors.forEach((color) => {
+        const key =
+          `${String(color.name).trim().toLowerCase()}__`;
+
+        const old = existing.get(key);
+
+        generated.push({
+          ...(old || {}),
+          _uiId: old?._uiId || createId("variant"),
+          color: { ...color },
+          size: undefined,
+          regularPrice:
+            old?.regularPrice ??
+            color?.regularPrice ??
+            null,
+          salePrice:
+            old?.salePrice ??
+            color?.salePrice ??
+            null,
+          stock: old?.stock ?? 1,
+          sku: old?.sku || "",
+          images:
+            Array.isArray(old?.images) && old.images.length
+              ? old.images
+              : Array.isArray(color?.images)
+                ? color.images
+                : [],
+          active: old?.active !== false,
+        });
+      });
+    } else {
+      sizes.forEach((size) => {
+        const key =
+          `__${String(size.name).trim().toLowerCase()}`;
+
+        const old = existing.get(key);
+
+        generated.push({
+          ...(old || {}),
+          _uiId: old?._uiId || createId("variant"),
+          color: undefined,
+          size: { ...size },
+          regularPrice:
+            old?.regularPrice ??
+            size?.regularPrice ??
+            null,
+          salePrice:
+            old?.salePrice ??
+            size?.salePrice ??
+            null,
+          stock: old?.stock ?? 1,
+          sku: old?.sku || "",
+          images:
+            Array.isArray(old?.images) ? old.images : [],
+          active: old?.active !== false,
+        });
+      });
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      variants: generated,
+      variantsEnabled: true,
+    }));
+
+    setError("");
+    showSuccess(
+      `${generated.length} variant combinations prepared.`
+    );
+  };
 
   const addVariant = () => {
     setForm(
@@ -1958,6 +2253,26 @@ export default function ProductsPage() {
       }
     }
 
+    for (
+      let index = 0;
+      index < form.options.sizes.length;
+      index++
+    ) {
+      const size = form.options.sizes[index];
+
+      if (
+        size.salePrice !== "" &&
+        size.salePrice !== null &&
+        size.salePrice !== undefined &&
+        size.regularPrice !== "" &&
+        size.regularPrice !== null &&
+        size.regularPrice !== undefined &&
+        Number(size.salePrice) > Number(size.regularPrice)
+      ) {
+        return `Size ${index + 1}: sale price cannot be greater than regular price.`;
+      }
+    }
+
     if (
       form.variantsEnabled &&
       form.variants.length
@@ -2023,6 +2338,54 @@ export default function ProductsPage() {
       excerpt:
         form.shortDescription
           ?.trim() || "",
+
+      sellingMode:
+        form.sellingMode === "meter"
+          ? "meter"
+          : "piece",
+
+      bulkOrderNote:
+        form.bulkOrderNote?.trim() ||
+        "Contact us for bulk orders.",
+
+      meterConfig: {
+        enabled:
+          form.sellingMode === "meter",
+        foldLength:
+          form.meterConfig?.foldLength?.trim() || "",
+        minMeters:
+          form.meterConfig?.minMeters === "" ||
+          form.meterConfig?.minMeters == null
+            ? null
+            : Number(form.meterConfig.minMeters),
+        maxMeters:
+          form.meterConfig?.maxMeters === "" ||
+          form.meterConfig?.maxMeters == null
+            ? null
+            : Number(form.meterConfig.maxMeters),
+        incrementMeters:
+          form.meterConfig?.incrementMeters === "" ||
+          form.meterConfig?.incrementMeters == null
+            ? null
+            : Number(form.meterConfig.incrementMeters),
+      },
+
+      shippingRules:
+        (form.shippingRules || []).map((rule) => ({
+          type: rule.type === "meter" ? "meter" : "size",
+          label: rule.label?.trim() || "",
+          sizeName: rule.sizeName?.trim() || "",
+          minMeters:
+            rule.minMeters === "" || rule.minMeters == null
+              ? null
+              : Number(rule.minMeters),
+          maxMeters:
+            rule.maxMeters === "" || rule.maxMeters == null
+              ? null
+              : Number(rule.maxMeters),
+          standardCharge: Number(rule.standardCharge || 0),
+          expressCharge: Number(rule.expressCharge || 0),
+        })),
 
       pricing: {
         regularPrice:
@@ -2103,6 +2466,24 @@ export default function ProductsPage() {
               ...color,
               _uiId:
                 undefined,
+              regularPrice:
+                color.regularPrice === "" ||
+                color.regularPrice == null
+                  ? null
+                  : Number(color.regularPrice),
+              salePrice:
+                color.salePrice === "" ||
+                color.salePrice == null
+                  ? null
+                  : Number(color.salePrice),
+              images:
+                Array.isArray(color.images)
+                  ? color.images.map((image, imageIndex) => ({
+                      ...image,
+                      _uiId: undefined,
+                      position: imageIndex,
+                    }))
+                  : [],
             })
           ),
 
@@ -2112,6 +2493,27 @@ export default function ProductsPage() {
               ...size,
               _uiId:
                 undefined,
+              details: size.details?.trim() || "",
+              regularPrice:
+                size.regularPrice === "" ||
+                size.regularPrice == null
+                  ? null
+                  : Number(size.regularPrice),
+              salePrice:
+                size.salePrice === "" ||
+                size.salePrice == null
+                  ? null
+                  : Number(size.salePrice),
+              shippingCharge:
+                size.shippingCharge === "" ||
+                size.shippingCharge == null
+                  ? null
+                  : Number(size.shippingCharge),
+              meters:
+                size.meters === "" ||
+                size.meters == null
+                  ? null
+                  : Number(size.meters),
             })
           ),
       },
@@ -3629,6 +4031,260 @@ export default function ProductsPage() {
                 </div>
               </Section>
 
+              {/* PRODUCT SELLING MODE */}
+
+              <Section
+                id="selling"
+                title="Product Type & Selling"
+                open={
+                  openSections.selling
+                }
+                onToggle={
+                  toggleSection
+                }
+              >
+                <div className="form-grid">
+                  <Field label="Selling Mode">
+                    <SelectInput
+                      value={form.sellingMode}
+                      onChange={(event) =>
+                        updateForm(
+                          "sellingMode",
+                          event.target.value
+                        )
+                      }
+                    >
+                      <option value="piece">
+                        Ready-made Bag / Piece
+                      </option>
+                      <option value="meter">
+                        Raw Fabric / Meter
+                      </option>
+                    </SelectInput>
+                  </Field>
+
+                  <Field label="Bulk Order Note">
+                    <TextInput
+                      value={form.bulkOrderNote}
+                      onChange={(event) =>
+                        updateForm(
+                          "bulkOrderNote",
+                          event.target.value
+                        )
+                      }
+                      placeholder="Contact us for bulk orders."
+                    />
+                  </Field>
+                </div>
+
+                {form.sellingMode === "meter" && (
+                  <div className="form-grid">
+                    <Field label="Fold Length">
+                      <TextInput
+                        value={form.meterConfig?.foldLength || ""}
+                        onChange={(event) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            meterConfig: {
+                              ...prev.meterConfig,
+                              enabled: true,
+                              foldLength: event.target.value,
+                            },
+                          }))
+                        }
+                        placeholder="Example: 58 inches"
+                      />
+                    </Field>
+
+                    <Field label="Meter Increment">
+                      <TextInput
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={form.meterConfig?.incrementMeters ?? ""}
+                        onChange={(event) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            meterConfig: {
+                              ...prev.meterConfig,
+                              enabled: true,
+                              incrementMeters: event.target.value,
+                            },
+                          }))
+                        }
+                        placeholder="Example: 10"
+                      />
+                    </Field>
+
+                    <Field label="Minimum Meters">
+                      <TextInput
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={form.meterConfig?.minMeters ?? ""}
+                        onChange={(event) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            meterConfig: {
+                              ...prev.meterConfig,
+                              enabled: true,
+                              minMeters: event.target.value,
+                            },
+                          }))
+                        }
+                        placeholder="Example: 10"
+                      />
+                    </Field>
+
+                    <Field label="Maximum Meters">
+                      <TextInput
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={form.meterConfig?.maxMeters ?? ""}
+                        onChange={(event) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            meterConfig: {
+                              ...prev.meterConfig,
+                              enabled: true,
+                              maxMeters: event.target.value,
+                            },
+                          }))
+                        }
+                        placeholder="Example: 100"
+                      />
+                    </Field>
+                  </div>
+                )}
+
+                <div className="option-card" style={{ marginTop: 12 }}>
+                  <div className="option-header">
+                    <strong>
+                      {form.sellingMode === "meter"
+                        ? "Meter Shipping Rules"
+                        : "Bag / Size Shipping Rules"}
+                    </strong>
+
+                    <div className="option-buttons">
+                      <button
+                        type="button"
+                        className="mini-button"
+                        onClick={() =>
+                          addShippingRule(
+                            form.sellingMode === "meter"
+                              ? "meter"
+                              : "size"
+                          )
+                        }
+                      >
+                        + Shipping Rule
+                      </button>
+                    </div>
+                  </div>
+
+                  {(form.shippingRules || []).map((rule, index) => (
+                    <div
+                      key={rule._uiId || index}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr 1fr 1fr 34px",
+                        gap: 8,
+                        marginBottom: 8,
+                      }}
+                    >
+                      <SelectInput
+                        value={rule.type || (form.sellingMode === "meter" ? "meter" : "size")}
+                        onChange={(event) =>
+                          updateShippingRule(index, "type", event.target.value)
+                        }
+                      >
+                        <option value="size">Size</option>
+                        <option value="meter">Meter</option>
+                      </SelectInput>
+
+                      <TextInput
+                        value={rule.type === "meter" ? rule.minMeters : rule.sizeName}
+                        onChange={(event) =>
+                          updateShippingRule(
+                            index,
+                            rule.type === "meter" ? "minMeters" : "sizeName",
+                            event.target.value
+                          )
+                        }
+                        placeholder={
+                          rule.type === "meter"
+                            ? "Min meters"
+                            : "Size name"
+                        }
+                      />
+
+                      <TextInput
+                        value={rule.type === "meter" ? rule.maxMeters : rule.label}
+                        onChange={(event) =>
+                          updateShippingRule(
+                            index,
+                            rule.type === "meter" ? "maxMeters" : "label",
+                            event.target.value
+                          )
+                        }
+                        placeholder={
+                          rule.type === "meter"
+                            ? "Max meters"
+                            : "Label/details"
+                        }
+                      />
+
+                      <TextInput
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={rule.standardCharge ?? ""}
+                        onChange={(event) =>
+                          updateShippingRule(
+                            index,
+                            "standardCharge",
+                            event.target.value
+                          )
+                        }
+                        placeholder="Standard ₹"
+                      />
+
+                      <button
+                        type="button"
+                        className="danger-icon-button"
+                        onClick={() => removeShippingRule(index)}
+                      >
+                        <X size={13} />
+                      </button>
+
+                      <div style={{ gridColumn: "1 / -1" }}>
+                        <TextInput
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={rule.expressCharge ?? ""}
+                          onChange={(event) =>
+                            updateShippingRule(
+                              index,
+                              "expressCharge",
+                              event.target.value
+                            )
+                          }
+                          placeholder="Express shipping ₹"
+                        />
+                      </div>
+                    </div>
+                  ))}
+
+                  {!form.shippingRules?.length && (
+                    <div className="option-empty">
+                      No product-specific shipping rules added.
+                    </div>
+                  )}
+                </div>
+              </Section>
+
               {/* VARIANTS */}
 
               <Section
@@ -3764,6 +4420,53 @@ export default function ProductsPage() {
                                 placeholder="#000000"
                               />
 
+                              <TextInput
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={color.regularPrice ?? ""}
+                                onChange={(event) =>
+                                  updateColor(
+                                    index,
+                                    "regularPrice",
+                                    event.target.value
+                                  )
+                                }
+                                placeholder="Price"
+                              />
+
+                              <TextInput
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={color.salePrice ?? ""}
+                                onChange={(event) =>
+                                  updateColor(
+                                    index,
+                                    "salePrice",
+                                    event.target.value
+                                  )
+                                }
+                                placeholder="Sale"
+                              />
+
+                              <label
+                                className="mini-button"
+                                style={{ cursor: "pointer" }}
+                              >
+                                + Images
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  multiple
+                                  hidden
+                                  onChange={(event) => {
+                                    uploadColorImages(index, event.target.files);
+                                    event.target.value = "";
+                                  }}
+                                />
+                              </label>
+
                               <button
                                 type="button"
                                 className="danger-icon-button"
@@ -3775,6 +4478,61 @@ export default function ProductsPage() {
                               >
                                 <X size={13} />
                               </button>
+
+                              {Array.isArray(color.images) &&
+                                color.images.length > 0 && (
+                                  <div
+                                    style={{
+                                      gridColumn: "1 / -1",
+                                      display: "flex",
+                                      flexWrap: "wrap",
+                                      gap: 6,
+                                      marginTop: 4,
+                                    }}
+                                  >
+                                    {color.images.map((image, imageIndex) => (
+                                      <div
+                                        key={image._uiId || image.url || imageIndex}
+                                        style={{
+                                          position: "relative",
+                                          width: 54,
+                                          height: 54,
+                                        }}
+                                      >
+                                        <img
+                                          src={image.url}
+                                          alt={color.name || "Colour"}
+                                          style={{
+                                            width: "100%",
+                                            height: "100%",
+                                            objectFit: "cover",
+                                            borderRadius: 6,
+                                          }}
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            removeColorImage(index, imageIndex)
+                                          }
+                                          style={{
+                                            position: "absolute",
+                                            top: -5,
+                                            right: -5,
+                                            width: 18,
+                                            height: 18,
+                                            border: 0,
+                                            borderRadius: "50%",
+                                            background: "#9C4B37",
+                                            color: "#fff",
+                                            cursor: "pointer",
+                                          }}
+                                        >
+                                          ×
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
 
                             </div>
                           )
@@ -3848,13 +4606,97 @@ export default function ProductsPage() {
                                 ) =>
                                   updateSize(
                                     index,
-                                    event
-                                      .target
-                                      .value
+                                    "name",
+                                    event.target.value
                                   )
                                 }
                                 placeholder="Size"
                               />
+
+                              {form.sellingMode === "meter" ? (
+                                <>
+                                  <TextInput
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={size.meters ?? ""}
+                                    onChange={(event) =>
+                                      updateSize(index, "meters", event.target.value)
+                                    }
+                                    placeholder="Meters"
+                                  />
+                                  <TextInput
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={size.regularPrice ?? ""}
+                                    onChange={(event) =>
+                                      updateSize(index, "regularPrice", event.target.value)
+                                    }
+                                    placeholder="10m Total Price ₹"
+                                  />
+                                  <TextInput
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={size.salePrice ?? ""}
+                                    onChange={(event) =>
+                                      updateSize(index, "salePrice", event.target.value)
+                                    }
+                                    placeholder="Sale Price ₹"
+                                  />
+                                  <TextInput
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={size.shippingCharge ?? ""}
+                                    onChange={(event) =>
+                                      updateSize(index, "shippingCharge", event.target.value)
+                                    }
+                                    placeholder="Shipping ₹"
+                                  />
+                                </>
+                              ) : (
+                                <>
+                                  <TextInput
+                                    value={size.details ?? ""}
+                                    onChange={(event) =>
+                                      updateSize(index, "details", event.target.value)
+                                    }
+                                    placeholder="Size details"
+                                  />
+                                  <TextInput
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={size.regularPrice ?? ""}
+                                    onChange={(event) =>
+                                      updateSize(index, "regularPrice", event.target.value)
+                                    }
+                                    placeholder="10m Total Price ₹"
+                                  />
+                                  <TextInput
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={size.salePrice ?? ""}
+                                    onChange={(event) =>
+                                      updateSize(index, "salePrice", event.target.value)
+                                    }
+                                    placeholder="Sale Price ₹"
+                                  />
+                                  <TextInput
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={size.shippingCharge ?? ""}
+                                    onChange={(event) =>
+                                      updateSize(index, "shippingCharge", event.target.value)
+                                    }
+                                    placeholder="Shipping ₹"
+                                  />
+                                </>
+                              )}
 
                               <button
                                 type="button"
@@ -3900,6 +4742,13 @@ export default function ProductsPage() {
                         >
                           <Plus size={13} />
                           Add Variant
+                        </button> 
+                        <button
+                          type="button"
+                          className="mini-button"
+                          onClick={generateVariants}
+                        >
+                          Generate Combinations
                         </button>
 
                       </div>

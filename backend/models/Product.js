@@ -67,6 +67,25 @@ const colorSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+
+    /* Optional colour-level pricing/images.
+       Variant pricing/images still take precedence when a variant is selected. */
+    regularPrice: {
+      type: Number,
+      min: 0,
+      default: null,
+    },
+
+    salePrice: {
+      type: Number,
+      min: 0,
+      default: null,
+    },
+
+    images: {
+      type: [imageSchema],
+      default: [],
+    },
   },
   {
     _id: false,
@@ -90,6 +109,41 @@ const sizeSchema = new mongoose.Schema(
     isCustom: {
       type: Boolean,
       default: false,
+    },
+
+    /* Bag/custom size details entered by admin. */
+    details: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    /* Optional fixed shipping charge for this bag/custom size. */
+    shippingCharge: {
+      type: Number,
+      min: 0,
+      default: null,
+    },
+
+    /* Useful when this size represents a meter length, e.g. 10m. */
+    meters: {
+      type: Number,
+      min: 0,
+      default: null,
+    },
+
+    /* Optional size/slab-level pricing.
+       Useful for products where 10m, 20m etc. have different total prices. */
+    regularPrice: {
+      type: Number,
+      min: 0,
+      default: null,
+    },
+
+    salePrice: {
+      type: Number,
+      min: 0,
+      default: null,
     },
   },
   {
@@ -313,6 +367,110 @@ const productSchema =
 
       /*
       |--------------------------------------------------------------------------
+      | Selling Mode
+      |--------------------------------------------------------------------------
+      |
+      | piece = bags/custom-size products
+      | meter = fabric sold by selectable meter-length sizes
+      */
+
+      sellingMode: {
+        type: String,
+        enum: ["piece", "meter"],
+        default: "piece",
+        index: true,
+      },
+
+      bulkOrderNote: {
+        type: String,
+        trim: true,
+        default: "Contact us for bulk orders.",
+        maxlength: 500,
+      },
+
+      meterConfig: {
+        enabled: {
+          type: Boolean,
+          default: false,
+        },
+
+        foldLength: {
+          type: String,
+          trim: true,
+          default: "",
+        },
+
+        minMeters: {
+          type: Number,
+          min: 0,
+          default: null,
+        },
+
+        maxMeters: {
+          type: Number,
+          min: 0,
+          default: null,
+        },
+
+        incrementMeters: {
+          type: Number,
+          min: 0,
+          default: null,
+        },
+      },
+
+      /*
+      |--------------------------------------------------------------------------
+      | Product-specific Shipping Rules
+      |--------------------------------------------------------------------------
+      |
+      | Bag/custom sizes can have their own charge.
+      | Meter sizes can have slab-based charges (10m, 20m, etc.).
+      */
+
+      shippingRules: {
+        type: [{
+          type: {
+            type: String,
+            enum: ["size", "meter"],
+            required: true,
+          },
+          label: {
+            type: String,
+            trim: true,
+            default: "",
+          },
+          sizeName: {
+            type: String,
+            trim: true,
+            default: "",
+          },
+          minMeters: {
+            type: Number,
+            min: 0,
+            default: null,
+          },
+          maxMeters: {
+            type: Number,
+            min: 0,
+            default: null,
+          },
+          standardCharge: {
+            type: Number,
+            min: 0,
+            default: 0,
+          },
+          expressCharge: {
+            type: Number,
+            min: 0,
+            default: 0,
+          },
+        }],
+        default: [],
+      },
+
+      /*
+      |--------------------------------------------------------------------------
       | Pricing
       |--------------------------------------------------------------------------
       */
@@ -514,6 +672,38 @@ const productSchema =
         index: true,
       },
 
+      /*
+      |--------------------------------------------------------------------------
+      | Product Sale Management
+      |--------------------------------------------------------------------------
+      | Separate from the Sale page's existing countdown/subscriber system.
+      */
+
+      saleManagement: {
+        discountPercent: {
+          type: Number,
+          min: 0,
+          max: 100,
+          default: null,
+        },
+
+        startsAt: {
+          type: Date,
+          default: null,
+        },
+
+        expiresAt: {
+          type: Date,
+          default: null,
+          index: true,
+        },
+
+        pricingSnapshot: {
+          type: mongoose.Schema.Types.Mixed,
+          default: null,
+        },
+      },
+
       featured: {
         type: Boolean,
         default: false,
@@ -677,6 +867,15 @@ productSchema.pre(
             ?.trim()
             .toLowerCase() || "";
 
+        /*
+         * Ignore completely empty placeholder variants. The API layer
+         * normally removes these, but this keeps direct Product.create()
+         * and older update payloads safe as well.
+         */
+        if (!color && !size) {
+          continue;
+        }
+
         const key =
           `${color}__${size}`;
 
@@ -719,6 +918,30 @@ productSchema.pre(
             );
           }
         }
+      }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Size Price Validation
+    |--------------------------------------------------------------------------
+    */
+    const sizes =
+      Array.isArray(this.options?.sizes)
+        ? this.options.sizes
+        : [];
+
+    for (const size of sizes) {
+      if (
+        size.salePrice !== null &&
+        size.salePrice !== undefined &&
+        size.regularPrice !== null &&
+        size.regularPrice !== undefined &&
+        size.salePrice > size.regularPrice
+      ) {
+        throw new Error(
+          `Size sale price cannot be greater than regular price: ${size.name || "Unknown size"}`
+        );
       }
     }
 

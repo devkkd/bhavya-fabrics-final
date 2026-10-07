@@ -31,6 +31,7 @@ const allowedTypes = [
   "subcategory",
   "review",
   "sale",
+ "hero",
 ];
 
 /*

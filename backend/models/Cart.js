@@ -26,6 +26,10 @@ const selectedColorSchema = new mongoose.Schema(
 const selectedSizeSchema = new mongoose.Schema(
   {
     name: { type: String, trim: true, default: "" },
+    value: { type: String, trim: true, default: "" },
+    meters: { type: Number, default: null },
+    shippingCharge: { type: Number, default: null },
+    details: { type: String, trim: true, default: "" },
   },
   { _id: false }
 );
@@ -94,6 +98,18 @@ const cartItemSchema = new mongoose.Schema(
       salePrice: { type: Number, default: null },
       variantRegularPrice: { type: Number, default: null },
       variantSalePrice: { type: Number, default: null },
+      finalPrice: { type: Number, default: 0 },
+      selectedColor: { type: selectedColorSchema, default: null },
+      selectedSize: { type: selectedSizeSchema, default: null },
+      colorImages: {
+        type: [String],
+        default: [],
+      },
+      sizeMeters: { type: Number, default: null },
+      sizeShippingCharge: { type: Number, default: null },
+      sellingMode: { type: String, default: "piece" },
+      priceUnit: { type: String, default: "" },
+      shippingRules: { type: Array, default: [] },
     },
   },
   {

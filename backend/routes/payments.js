@@ -22,6 +22,8 @@ const Address = require("../models/Address");
 
 const Customer = require("../models/Customer");
 
+const BuyNowSession = require("../models/BuyNowSession");
+
 
 
 const customerAuth = require("../middleware/customerAuth");
@@ -290,7 +292,9 @@ const getProductImages = (
 
   product,
 
-  variant = null
+  variant = null,
+
+  cartItem = null
 
 ) => {
 
@@ -394,7 +398,35 @@ const getProductImages = (
 
 
 
-  /*
+    /*
+  |--------------------------------------------------------------------------
+  | Selected Colour Images
+  |--------------------------------------------------------------------------
+  */
+
+  if (images.length === 0 && cartItem?.selectedColor) {
+    const target = String(cartItem.selectedColor?.name || cartItem.selectedColor?.value || cartItem.selectedColor || "").trim().toLowerCase();
+    const colorOption = Array.isArray(product?.options?.colors)
+      ? product.options.colors.find((color) => {
+          const a = String(color?.name || color?.value || "").trim().toLowerCase();
+          return a === target || a.includes(target) || target.includes(a);
+        })
+      : null;
+
+    if (Array.isArray(colorOption?.images)) {
+      colorOption.images.forEach((image, index) => {
+        const url = typeof image === "string" ? image.trim() : String(image?.url || "").trim();
+        if (!url || images.some((existing) => existing.url === url)) return;
+        images.push({
+          url,
+          alt: typeof image === "object" ? image.alt || product?.title || "" : product?.title || "",
+          position: typeof image === "object" && Number.isFinite(Number(image.position)) ? Number(image.position) : index,
+        });
+      });
+    }
+  }
+
+/*
 
   |--------------------------------------------------------------------------
 
@@ -582,513 +614,289 @@ const getProductImages = (
 
 
 
-const findVariant = (
-
-  product,
-
-  cartItem
-
-) => {
-
-  const variants =
-
-    Array.isArray(
-
-      product?.variants
-
-    )
-
-      ? product.variants
-
-      : [];
-
-
-
-  if (variants.length === 0) {
-
-    return null;
-
-  }
-
-
-
-  /*
-
-  |--------------------------------------------------------------------------
-
-  | Variant ID
-
-  |--------------------------------------------------------------------------
-
-  */
-
-
-
-  if (
-
-    cartItem?.variantId &&
-
-    mongoose.Types.ObjectId.isValid(
-
-      cartItem.variantId
-
-    )
-
-  ) {
-
-    const variantById =
-
-      variants.find(
-
-        (variant) =>
-
-          variant?._id &&
-
-          String(
-
-            variant._id
-
-          ) ===
-
-            String(
-
-              cartItem.variantId
-
-            )
-
-      );
-
-
-
-    if (variantById) {
-
-      return variantById;
-
-    }
-
-  }
-
-
-
-  /*
-
-  |--------------------------------------------------------------------------
-
-  | Selected Colour
-
-  |--------------------------------------------------------------------------
-
-  */
-
-
-
-  const selectedColorName =
-
-    cleanString(
-
-      cartItem?.selectedColor
-
-        ?.name ||
-
-        cartItem?.selectedColor
-
-          ?.value
-
-    ).toLowerCase();
-
-
-
-  const selectedColorValue =
-
-    cleanString(
-
-      cartItem?.selectedColor
-
-        ?.value ||
-
-        cartItem?.selectedColor
-
-          ?.name
-
-    ).toLowerCase();
-
-
-
-  /*
-
-  |--------------------------------------------------------------------------
-
-  | Selected Size
-
-  |--------------------------------------------------------------------------
-
-  */
-
-
-
-  const selectedSizeName =
-
-    cleanString(
-
-      cartItem?.selectedSize
-
-        ?.name
-
-    ).toLowerCase();
-
-
-
-  /*
-
-  |--------------------------------------------------------------------------
-
-  | Find Combination
-
-  |--------------------------------------------------------------------------
-
-  */
-
-
-
-  return (
-
-    variants.find(
-
-      (variant) => {
-
-        if (!variant) {
-
-          return false;
-
-        }
-
-
-
-        let colorMatches =
-
-          true;
-
-
-
-        let sizeMatches =
-
-          true;
-
-
-
-        /*
-
-        |--------------------------------------------------------------------------
-
-        | Color Match
-
-        |--------------------------------------------------------------------------
-
-        */
-
-
-
-        if (
-
-          cartItem?.selectedColor
-
-        ) {
-
-          const variantColor =
-
-            variant.color;
-
-
-
-          if (
-
-            !variantColor
-
-          ) {
-
-            colorMatches =
-
-              false;
-
-          } else {
-
-            const variantName =
-
-              cleanString(
-
-                variantColor.name
-
-              ).toLowerCase();
-
-
-
-            const variantValue =
-
-              cleanString(
-
-                variantColor.value
-
-              ).toLowerCase();
-
-
-
-            colorMatches =
-
-              variantName ===
-
-                selectedColorName ||
-
-              variantName ===
-
-                selectedColorValue ||
-
-              variantValue ===
-
-                selectedColorName ||
-
-              variantValue ===
-
-                selectedColorValue;
-
-          }
-
-        }
-
-
-
-        /*
-
-        |--------------------------------------------------------------------------
-
-        | Size Match
-
-        |--------------------------------------------------------------------------
-
-        */
-
-
-
-        if (
-
-          cartItem?.selectedSize
-
-        ) {
-
-          const variantSize =
-
-            variant.size;
-
-
-
-          if (
-
-            !variantSize
-
-          ) {
-
-            sizeMatches =
-
-              false;
-
-          } else {
-
-            const variantSizeName =
-
-              cleanString(
-
-                variantSize.name
-
-              ).toLowerCase();
-
-
-
-            sizeMatches =
-
-              variantSizeName ===
-
-              selectedSizeName;
-
-          }
-
-        }
-
-
-
-        return (
-
-          colorMatches &&
-
-          sizeMatches
-
-        );
-
-      }
-
-    ) || null
-
-  );
-
+const normalizeSelectedOptionName = (value) => {
+  if (value === null || value === undefined) return "";
+  const raw = typeof value === "object"
+    ? value.name || value.value || value.label || ""
+    : value;
+  return cleanString(raw).toLowerCase().replace(/\s+/g, "");
 };
 
+const optionTokens = (value) => {
+  const raw = typeof value === "object"
+    ? [value?.name, value?.value, value?.label, value?.hex]
+    : [value];
+  const tokens = [];
+  raw.map((v) => cleanString(v).toLowerCase()).filter(Boolean).forEach((v) => {
+    tokens.push(v);
+    tokens.push(v.replace(/\s+/g, ""));
+    tokens.push(v.replace(/[^a-z0-9.#]+/g, ""));
+  });
+  return [...new Set(tokens.filter(Boolean))];
+};
 
+const optionMatches = (a, b) => {
+  const left = optionTokens(a);
+  const right = optionTokens(b);
+  return left.some((v) => right.includes(v));
+};
 
-/*
+const findVariant = (product, cartItem) => {
+  const variants = Array.isArray(product?.variants)
+    ? product.variants.filter((variant) => variant?.active !== false)
+    : [];
+  if (!variants.length) return null;
 
-|--------------------------------------------------------------------------
+  /* variantId is the canonical identity of a selected variant. */
+  if (cartItem?.variantId) {
+    if (!mongoose.Types.ObjectId.isValid(String(cartItem.variantId))) return null;
+    return (
+      variants.find(
+        (variant) => String(variant?._id) === String(cartItem.variantId)
+      ) || null
+    );
+  }
 
-| RESOLVE ITEM PRICE
+  const selectedColor = cartItem?.selectedColor || "";
+  const selectedSize = cartItem?.selectedSize || "";
+  if (!selectedColor && !selectedSize) return null;
 
-|--------------------------------------------------------------------------
-
-*/
-
-
+  return variants.find((variant) => {
+    const colorMatches = selectedColor
+      ? optionMatches(
+          variant?.color || {
+            name: variant?.colorName,
+            value: variant?.colorValue,
+            hex: variant?.colorHex,
+          },
+          selectedColor
+        )
+      : true;
+    const sizeMatches = selectedSize
+      ? optionMatches(
+          variant?.size || {
+            name: variant?.sizeName,
+            value: variant?.sizeValue,
+          },
+          selectedSize
+        )
+      : true;
+    return colorMatches && sizeMatches;
+  }) || null;
+};
 
 const resolveItemPrice = (
-
   product,
-
-  variant
-
+  variant,
+  cartItem = null
 ) => {
-
-  /*
-
-  |--------------------------------------------------------------------------
-
-  | Variant Sale Price
-
-  |--------------------------------------------------------------------------
-
-  */
-
-
-
-  if (
-
-    variant?.salePrice !==
-
-      null &&
-
-    variant?.salePrice !==
-
-      undefined
-
-  ) {
-
-    return toNumber(
-
-      variant.salePrice
-
-    );
-
-  }
-
-
-
-  /*
-
-  |--------------------------------------------------------------------------
-
-  | Variant Regular Price
-
-  |--------------------------------------------------------------------------
-
-  */
-
-
-
-  if (
-
-    variant?.regularPrice !==
-
-      null &&
-
-    variant?.regularPrice !==
-
-      undefined
-
-  ) {
-
-    return toNumber(
-
-      variant.regularPrice
-
-    );
-
-  }
-
-
-
-  /*
-
-  |--------------------------------------------------------------------------
-
-  | Product Sale Price
-
-  |--------------------------------------------------------------------------
-
-  */
-
-
-
-  if (
-
-    product?.pricing
-
-      ?.salePrice !== null &&
-
-    product?.pricing
-
-      ?.salePrice !== undefined
-
-  ) {
-
-    return toNumber(
-
-      product.pricing.salePrice
-
-    );
-
-  }
-
-
-
-  /*
-
-  |--------------------------------------------------------------------------
-
-  | Product Regular Price
-
-  |--------------------------------------------------------------------------
-
-  */
-
-
-
-  return toNumber(
-
-    product?.pricing
-
-      ?.regularPrice
-
+  const sizeName = normalizeSelectedOptionName(
+    cartItem?.selectedSize || variant?.size || ""
   );
 
+  const sizeOption = Array.isArray(product?.options?.sizes)
+    ? product.options.sizes.find(
+        (size) => normalizeSelectedOptionName(size) === sizeName
+      )
+    : null;
+
+  const variantRegular = Number(variant?.regularPrice);
+  const variantSale = Number(variant?.salePrice);
+  const sizeRegular = Number(sizeOption?.regularPrice ?? variant?.size?.regularPrice);
+  const sizeSale = Number(sizeOption?.salePrice ?? variant?.size?.salePrice);
+
+  const colorOption =
+    cartItem?.selectedColor && Array.isArray(product?.options?.colors)
+      ? product.options.colors.find((color) => optionMatches(color, cartItem.selectedColor))
+      : null;
+
+  const colorRegular = Number(colorOption?.regularPrice);
+  const colorSale = Number(colorOption?.salePrice);
+
+  const regular =
+    Number.isFinite(variantRegular) && variantRegular > 0
+      ? variantRegular
+      : Number.isFinite(sizeRegular) && sizeRegular > 0
+        ? sizeRegular
+        : Number.isFinite(colorRegular) && colorRegular > 0
+          ? colorRegular
+          : toNumber(product?.pricing?.regularPrice, 0);
+
+  const sale = product?.showOnSale
+    ? (
+        Number.isFinite(variantSale) && variantSale > 0
+          ? variantSale
+          : Number.isFinite(sizeSale) && sizeSale > 0
+            ? sizeSale
+            : Number.isFinite(colorSale) && colorSale > 0
+              ? colorSale
+              : toNumber(product?.pricing?.salePrice, 0)
+      )
+    : 0;
+
+  return product?.showOnSale && sale > 0 && regular > sale
+    ? sale
+    : regular;
 };
 
+const getCustomProductShipping = (product, cartItem, shippingMethod) => {
+  const rules = Array.isArray(product?.shippingRules) ? product.shippingRules : [];
+  const selectedSizeName = normalizeSelectedOptionName(cartItem?.selectedSize || "");
 
+  const variant =
+    cartItem?.variantId && Array.isArray(product?.variants)
+      ? product.variants.find((v) => String(v?._id) === String(cartItem.variantId))
+      : null;
 
-/*
+  const variantSize = variant?.size || null;
 
-|--------------------------------------------------------------------------
+  const configuredSize = Array.isArray(product?.options?.sizes)
+    ? product.options.sizes.find(
+        (size) => normalizeSelectedOptionName(size) === selectedSizeName
+      )
+    : null;
 
-| BUILD ORDER ITEM
+  const directCharge =
+    configuredSize?.shippingCharge ??
+    variantSize?.shippingCharge ??
+    cartItem?.snapshot?.sizeShippingCharge;
 
-|--------------------------------------------------------------------------
+  if (
+    directCharge !== null &&
+    directCharge !== undefined &&
+    Number.isFinite(Number(directCharge))
+  ) {
+    return Math.max(0, Number(directCharge));
+  }
 
-*/
+  if (product?.sellingMode === "meter") {
+    const meters = Number(
+      configuredSize?.meters ??
+      variantSize?.meters ??
+      cartItem?.snapshot?.sizeMeters
+    );
 
+    if (Number.isFinite(meters)) {
+      const rule = rules.find((item) => {
+        if (item?.type !== "meter") return false;
+        const min = item?.minMeters == null ? 0 : Number(item.minMeters);
+        const max = item?.maxMeters == null ? Infinity : Number(item.maxMeters);
+        return meters >= min && meters <= max;
+      });
 
+      if (rule) {
+        return shippingMethod === "express"
+          ? Number(rule.expressCharge || 0)
+          : Number(rule.standardCharge || 0);
+      }
+    }
+  }
+
+  if (selectedSizeName) {
+    const rule = rules.find(
+      (item) =>
+        item?.type === "size" &&
+        normalizeSelectedOptionName(item?.sizeName || item?.label || "") ===
+          selectedSizeName
+    );
+
+    if (rule) {
+      return shippingMethod === "express"
+        ? Number(rule.expressCharge || 0)
+        : Number(rule.standardCharge || 0);
+    }
+  }
+
+  return null;
+};
+
+const calculateShippingCharges = async (cart, shippingMethod) => {
+  if (!cart?.items?.length) return 0;
+
+  let total = 0;
+
+  for (const item of cart.items) {
+    const product = await Product.findById(item.productId)
+      .select(
+        "title sellingMode shippingRules options.sizes options.colors variants pricing showOnSale"
+      )
+      .lean();
+
+    if (!product) continue;
+
+    const custom = getCustomProductShipping(product, item, shippingMethod);
+    total +=
+      custom === null
+        ? Number(SHIPPING_RATES[shippingMethod] || 0)
+        : custom;
+  }
+
+  return Math.max(0, Math.round(total * 100) / 100);
+};
+
+router.post("/shipping-preview", customerAuth, async (req, res) => {
+  try {
+    const customerId = req.customer._id;
+    const sessionId = String(
+      req.body?.buyNowSessionId || req.body?.sessionId || ""
+    ).trim();
+
+    let cart = null;
+
+    if (sessionId) {
+      const session = await BuyNowSession.findOne({
+        _id: sessionId,
+        customerId,
+        expiresAt: { $gt: new Date() },
+      });
+
+      if (!session) {
+        return res.status(400).json({
+          success: false,
+          message: "Buy Now session expired or invalid.",
+        });
+      }
+
+      cart = {
+        items: [
+          {
+            productId: session.productId,
+            quantity: Number(session.quantity || 1),
+            selectedColor: session.selectedColor || "",
+            selectedSize: session.selectedSize || "",
+            variantId: session.variantId || "",
+            snapshot: session.snapshot || {},
+          },
+        ],
+      };
+    } else {
+      cart = await Cart.findOne({ customerId }).lean();
+    }
+
+    if (!cart?.items?.length) {
+      return res.json({
+        success: true,
+        shipping: { standard: 0, express: 0 },
+      });
+    }
+
+    const [standard, express] = await Promise.all([
+      calculateShippingCharges(cart, "standard"),
+      calculateShippingCharges(cart, "express"),
+    ]);
+
+    return res.json({
+      success: true,
+      shipping: { standard, express },
+    });
+  } catch (error) {
+    console.error("POST /payments/shipping-preview error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error?.message || "Unable to calculate shipping charges.",
+    });
+  }
+});
 
 const buildOrderItem = async (
 
@@ -1342,85 +1150,29 @@ const buildOrderItem = async (
 
 
 
-  if (
+  if (cartItem.selectedSize) {
+    const selectedSize = normalizeSelectedOptionName(cartItem.selectedSize);
+    const availableSizes = Array.isArray(product?.options?.sizes)
+      ? product.options.sizes
+      : [];
 
-    cartItem.selectedSize
+    // A generated variant is the authoritative source when it exists.
+    // This also supports products where the admin saved the size only
+    // inside the variant and not inside options.sizes.
+    const variantSize = normalizeSelectedOptionName(variant?.size);
 
-  ) {
+    const existsInOptions = availableSizes.some(
+      (size) => normalizeSelectedOptionName(size) === selectedSize
+    );
 
-    const selectedSize =
+    const existsInVariant = variantSize && variantSize === selectedSize;
 
-      cleanString(
-
-        cartItem.selectedSize
-
-          ?.name
-
-      ).toLowerCase();
-
-
-
-    const availableSizes =
-
-      product?.options
-
-        ?.sizes || [];
-
-
-
-    if (
-
-      availableSizes.length >
-
-      0
-
-    ) {
-
-      const exists =
-
-        availableSizes.some(
-
-          (size) => {
-
-            const name =
-
-              cleanString(
-
-                size?.name
-
-              ).toLowerCase();
-
-
-
-            return (
-
-              name ===
-
-              selectedSize
-
-            );
-
-          }
-
-        );
-
-
-
-      if (!exists) {
-
-        throw new Error(
-
-          `Selected size is no longer available for "${product.title}".`
-
-        );
-
-      }
-
+    if (!existsInOptions && !existsInVariant) {
+      throw new Error(
+        `Selected size is no longer available for "${product.title}".`
+      );
     }
-
   }
-
-
 
   /*
 
@@ -1592,7 +1344,9 @@ const buildOrderItem = async (
 
       product,
 
-      variant
+      variant,
+
+      cartItem
 
     );
 
@@ -1650,7 +1404,9 @@ const buildOrderItem = async (
 
       product,
 
-      variant
+      variant,
+
+      cartItem
 
     );
 
@@ -2057,6 +1813,8 @@ const buildOrderItem = async (
 
     salePrice:
 
+      product?.showOnSale &&
+
       variant?.salePrice !==
 
         null &&
@@ -2239,6 +1997,8 @@ router.post(
 
         shippingMethod,
 
+        sessionId,
+
       } = req.body;
 
 
@@ -2246,6 +2006,24 @@ router.post(
       const customerId =
 
         req.customer._id;
+
+      
+      /* Load Buy Now session if provided */
+      let buyNowSession = null;
+      if (sessionId) {
+        buyNowSession = await BuyNowSession.findOne({
+          _id: sessionId,
+          customerId,
+          expiresAt: { $gt: new Date() },
+        });
+
+        if (!buyNowSession) {
+          return res.status(400).json({
+            success: false,
+            message: "Buy Now session expired or invalid.",
+          });
+        }
+      }
 
 
 
@@ -2333,42 +2111,43 @@ router.post(
 
       |--------------------------------------------------------------------------
 
-      | Cart
+      | Cart or Buy Now Items
 
       |--------------------------------------------------------------------------
 
       */
 
+      let cartToProcess = null;
 
-
-      const cart =
-
-        await Cart.findOne({
-
+      if (buyNowSession) {
+        /* For Buy Now: create a cart-like object from session */
+        cartToProcess = {
+          items: [
+            {
+              productId: buyNowSession.productId,
+              quantity: buyNowSession.quantity,
+              selectedColor: buyNowSession.selectedColor || "",
+              selectedSize: buyNowSession.selectedSize || "",
+              variantId: buyNowSession.variantId || "",
+            },
+          ],
+        };
+      } else {
+        /* For normal checkout: use actual cart from database */
+        cartToProcess = await Cart.findOne({
           customerId,
-
         });
-
-
+      }
 
       if (
-
-        !cart ||
-
-        cart.items.length === 0
-
+        !cartToProcess ||
+        cartToProcess.items.length === 0
       ) {
-
         return res.status(400).json({
-
           success: false,
-
           message:
-
             "Cart is empty.",
-
         });
-
       }
 
 
@@ -2435,7 +2214,7 @@ router.post(
 
         await buildValidatedCart(
 
-          cart
+          cartToProcess
 
         );
 
@@ -2453,13 +2232,7 @@ router.post(
 
 
 
-      const shippingCharges =
-
-        SHIPPING_RATES[
-
-          shippingMethod
-
-        ];
+      const shippingCharges = await calculateShippingCharges(cartToProcess, shippingMethod);
 
 
 
@@ -2887,6 +2660,8 @@ router.post(
 
         addressId,
 
+        sessionId,
+
       } = req.body;
 
 
@@ -3195,13 +2970,40 @@ router.post(
 
         });
 
+      let buyNowSession = null;
+      if (sessionId) {
+        buyNowSession = await BuyNowSession.findOne({
+          _id: sessionId,
+          customerId,
+          expiresAt: { $gt: new Date() },
+        });
+      }
 
+      let cartToProcess = null;
+
+      if (buyNowSession) {
+        /* For Buy Now: create a cart-like object from session */
+        cartToProcess = {
+          items: [
+            {
+              productId: buyNowSession.productId,
+              quantity: buyNowSession.quantity,
+              selectedColor: buyNowSession.selectedColor || "",
+              selectedSize: buyNowSession.selectedSize || "",
+              variantId: buyNowSession.variantId || "",
+            },
+          ],
+        };
+      } else {
+        /* For normal checkout: use actual cart from database */
+        cartToProcess = cart;
+      }
 
       if (
 
-        !cart ||
+        !cartToProcess ||
 
-        cart.items.length === 0
+        cartToProcess.items.length === 0
 
       ) {
 
@@ -3349,7 +3151,7 @@ router.post(
 
         await buildValidatedCart(
 
-          cart
+          cartToProcess
 
         );
 
@@ -3367,13 +3169,7 @@ router.post(
 
 
 
-      const shippingCharges =
-
-        SHIPPING_RATES[
-
-          shippingMethod
-
-        ];
+      const shippingCharges = await calculateShippingCharges(cartToProcess, shippingMethod);
 
 
 
@@ -4075,11 +3871,17 @@ router.post(
 
 
 
-      await Cart.findByIdAndDelete(
+      /* Only clear cart if NOT a Buy Now order */
+      if (!buyNowSession) {
+        await Cart.findByIdAndDelete(
 
-        cart._id
+          cart._id
 
-      );
+        );
+      } else {
+        /* Delete the Buy Now session after successful order */
+        await BuyNowSession.findByIdAndDelete(buyNowSession._id);
+      }
 
 
 
@@ -4575,6 +4377,411 @@ router.post(
 
 );
 
+/* =====================================================
+   GET /api/payments/buy-now/:sessionId
+===================================================== */
 
+router.get(
+  "/buy-now/:sessionId",
+  customerAuth,
+  async (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      const customerId = req.customer._id;
+      if (!mongoose.Types.ObjectId.isValid(sessionId)) {
+        return res.status(400).json({ success: false, message: "Invalid Buy Now session." });
+      }
+      const session = await BuyNowSession.findOne({
+        _id: sessionId,
+        customerId,
+        expiresAt: { $gt: new Date() },
+      }).lean();
+      if (!session) {
+        return res.status(404).json({ success: false, message: "Buy Now session expired or invalid." });
+      }
+      const snapshot = session.snapshot || {};
+      const finalPrice = Number(snapshot.finalPrice) > 0
+        ? Number(snapshot.finalPrice)
+        : Number(
+            snapshot.variantSalePrice ||
+            snapshot.salePrice ||
+            snapshot.variantRegularPrice ||
+            snapshot.regularPrice ||
+            0
+          );
+
+      return res.json({
+        success: true,
+        session: {
+          id: String(session._id),
+          productId: session.productId,
+          quantity: Number(session.quantity || 1),
+          selectedColor: session.selectedColor || "",
+          selectedSize: session.selectedSize || "",
+          variantId: session.variantId ? String(session.variantId) : "",
+          snapshot: {
+            ...snapshot,
+            finalPrice,
+          },
+          expiresAt: session.expiresAt,
+        },
+      });
+    } catch (error) {
+      console.error("GET /api/payments/buy-now/:sessionId error:", error);
+      return res.status(500).json({ success: false, message: "Failed to load Buy Now session." });
+    }
+  }
+);
+
+/* =====================================================
+   POST /api/payments/buy-now
+   
+   Create a Buy Now session (single product, not from cart)
+   Returns session ID for later use during checkout
+===================================================== */
+
+router.post(
+  "/buy-now",
+  customerAuth,
+  async (req, res) => {
+    try {
+      const {
+        productId,
+        quantity,
+        selectedColor,
+        selectedSize,
+        variantId,
+      } = req.body;
+
+      const customerId = req.customer._id;
+
+      const normalizedSelectedColor =
+        typeof selectedColor === "object" && selectedColor !== null
+          ? String(selectedColor.name || selectedColor.value || "").trim()
+          : String(selectedColor || "").trim();
+
+      const normalizedSelectedSize =
+        typeof selectedSize === "object" && selectedSize !== null
+          ? String(selectedSize.name || selectedSize.value || "").trim()
+          : String(selectedSize || "").trim();
+
+      /* Validate product ID */
+      if (
+        !productId ||
+        !mongoose.Types.ObjectId.isValid(productId)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Valid product ID is required.",
+        });
+      }
+
+      /* Fetch product with all details */
+      const product = await Product.findById(productId);
+
+      if (!product || product.status !== "published") {
+        return res.status(404).json({
+          success: false,
+          message: "Product not found or unavailable.",
+        });
+      }
+
+      /* Validate quantity */
+      const qty = Math.max(
+        1,
+        Math.min(100, Math.floor(Number(quantity) || 1))
+      );
+
+      /* Handle variants if enabled */
+      let selectedVariant = null;
+      const variantsEnabled =
+        Boolean(product?.variantsEnabled) ||
+        (Array.isArray(product?.variants) &&
+          product.variants.length > 0);
+
+      if (variantsEnabled) {
+        const activeVariants = Array.isArray(
+          product?.variants
+        )
+          ? product.variants.filter(
+              (v) => v?.active !== false
+            )
+          : [];
+
+        /* Find variant by ID first */
+        if (variantId && mongoose.Types.ObjectId.isValid(String(variantId))) {
+          selectedVariant = activeVariants.find(
+            (v) => String(v?._id) === String(variantId)
+          );
+        }
+
+        /* If not found by ID, try to find by color/size */
+        if (!selectedVariant && (normalizedSelectedColor || normalizedSelectedSize)) {
+          selectedVariant = activeVariants.find((v) => {
+            /* Normalize color comparison */
+            let colorMatch = true;
+            if (normalizedSelectedColor) {
+              const variantColorName = String(v?.color?.name || v?.color?.value || "").toLowerCase().trim();
+              const selectedColorLower = normalizedSelectedColor.toLowerCase();
+              colorMatch = variantColorName === selectedColorLower || variantColorName.includes(selectedColorLower) || selectedColorLower.includes(variantColorName);
+            }
+
+            /* Normalize size comparison */
+            let sizeMatch = true;
+            if (normalizedSelectedSize) {
+              const variantSizeName = String(v?.size?.name || v?.size?.value || "").toLowerCase().trim();
+              const selectedSizeLower = normalizedSelectedSize.toLowerCase();
+              sizeMatch = variantSizeName === selectedSizeLower || variantSizeName.includes(selectedSizeLower) || selectedSizeLower.includes(variantSizeName);
+            }
+
+            return colorMatch && sizeMatch;
+          });
+        }
+
+        /* Validate variant selection if required */
+        const hasColorOptions =
+          Array.isArray(product?.options?.colors) &&
+          product.options.colors.length > 0;
+        const hasSizeOptions =
+          Array.isArray(product?.options?.sizes) &&
+          product.options.sizes.length > 0;
+
+        if (hasColorOptions && !selectedColor) {
+          return res.status(400).json({
+            success: false,
+            message: "Please select a color.",
+          });
+        }
+
+        /* Size is optional. Do not block colour-only / No Size products. */
+
+        if (!selectedVariant) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Selected color and size combination is unavailable.",
+          });
+        }
+
+        /* Check stock */
+        const variantStock = Number(selectedVariant.stock || 0);
+        if (variantStock <= 0) {
+          return res.status(400).json({
+            success: false,
+            message: "Selected variant is out of stock.",
+          });
+        }
+
+        if (qty > variantStock) {
+          return res.status(400).json({
+            success: false,
+            message: `Only ${variantStock} units available for this variant.`,
+          });
+        }
+      }
+
+      /* Colour/variant-aware images. */
+      const images = [];
+      const pushImage = (img, index) => {
+        const url = typeof img === "string" ? img.trim() : String(img?.url || "").trim();
+        if (!url || images.some((item) => item.url === url)) return;
+        images.push({ url, alt: typeof img === "object" ? img.alt || product.title || "" : product.title || "", position: index });
+      };
+      if (selectedVariant?.images?.length) selectedVariant.images.forEach(pushImage);
+      if (!images.length && selectedColor) {
+        const color = (product?.options?.colors || []).find((item) => {
+          const a = String(item?.name || item?.value || "").toLowerCase().trim();
+          const b = String(selectedColor).toLowerCase().trim();
+          return a === b || a.includes(b) || b.includes(a);
+        });
+        if (color?.images?.length) color.images.forEach(pushImage);
+      }
+      if (!images.length && product?.mainImage?.url) pushImage(product.mainImage, 0);
+      if (Array.isArray(product?.gallery)) product.gallery.forEach((img, index) => pushImage(img, index + 1));
+      const mainImageUrl = images[0]?.url || product?.mainImage?.url || "";
+
+      const colorSnapshot = (() => {
+        const target = String(selectedColor || "").trim().toLowerCase();
+        const color = Array.isArray(product?.options?.colors)
+          ? product.options.colors.find((item) => {
+              const value = String(item?.name || item?.value || "").trim().toLowerCase();
+              return value === target || value.includes(target) || target.includes(value);
+            })
+          : null;
+
+        return color
+          ? {
+              name: color.name || "",
+              value: color.value || "",
+              hex: color.hex || "",
+              images: Array.isArray(color.images) ? color.images : [],
+              regularPrice: color.regularPrice ?? null,
+              salePrice: product?.showOnSale ? (color.salePrice ?? null) : null,
+            }
+          : null;
+      })();
+
+      const sizeSnapshot = (() => {
+        const target = normalizeSelectedOptionName(selectedSize);
+        const configured = Array.isArray(product?.options?.sizes)
+          ? product.options.sizes.find(
+              (item) => normalizeSelectedOptionName(item) === target
+            )
+          : null;
+        const variantSize = selectedVariant?.size || null;
+        if (!configured && !variantSize) return null;
+
+        const size = {
+          ...(variantSize || {}),
+          ...(configured || {}),
+        };
+
+        return {
+          name: size.name || size.value || "",
+          value: size.value || size.name || "",
+          meters: size.meters ?? null,
+          foldLength: size.foldLength ?? null,
+          shippingCharge: size.shippingCharge ?? null,
+          regularPrice: size.regularPrice ?? null,
+          salePrice: size.salePrice ?? null,
+          details: size.details || size.description || "",
+        };
+      })();
+
+      const variantRegular = Number(selectedVariant?.regularPrice);
+      const sizeRegular = Number(sizeSnapshot?.regularPrice);
+      const colorRegular = Number(colorSnapshot?.regularPrice);
+
+      const baseRegularPrice =
+        (
+          Number.isFinite(variantRegular) && variantRegular > 0
+            ? variantRegular
+            : Number.isFinite(sizeRegular) && sizeRegular > 0
+              ? sizeRegular
+              : Number.isFinite(colorRegular) && colorRegular > 0
+                ? colorRegular
+                : Number(product?.pricing?.regularPrice || 0)
+        ) || 0;
+
+      const variantSale = Number(selectedVariant?.salePrice);
+      const sizeSale = Number(sizeSnapshot?.salePrice);
+      const colorSale = Number(colorSnapshot?.salePrice);
+
+      const activeSalePrice = product?.showOnSale
+        ? (
+            Number.isFinite(variantSale) && variantSale > 0
+              ? variantSale
+              : Number.isFinite(sizeSale) && sizeSale > 0
+                ? sizeSale
+                : Number.isFinite(colorSale) && colorSale > 0
+                  ? colorSale
+                  : Number(product?.pricing?.salePrice || 0)
+          )
+        : 0;
+
+      const validSalePrice =
+        Number.isFinite(activeSalePrice) &&
+        activeSalePrice > 0 &&
+        activeSalePrice < baseRegularPrice
+          ? activeSalePrice
+          : null;
+
+      const finalPrice = validSalePrice ?? baseRegularPrice;
+
+      /* Create and save Buy Now session */
+      const buyNowSession = new BuyNowSession({
+        customerId,
+        productId: product._id,
+        quantity: qty,
+        selectedColor: normalizedSelectedColor,
+        selectedSize: normalizedSelectedSize,
+        variantId: selectedVariant?._id || null,
+        snapshot: {
+          title: product?.title || "Product",
+          slug: product?.slug || "",
+          imageUrl: mainImageUrl,
+          images: images,
+          regularPrice: baseRegularPrice,
+          salePrice: validSalePrice,
+          variantRegularPrice:
+            selectedVariant?.regularPrice != null
+              ? Number(selectedVariant.regularPrice)
+              : null,
+          variantSalePrice:
+            selectedVariant?.salePrice != null && product?.showOnSale
+              ? Number(selectedVariant.salePrice)
+              : null,
+          finalPrice,
+          showOnSale: Boolean(product?.showOnSale),
+          sellingMode: product?.sellingMode || "piece",
+          priceUnit: product?.priceUnit || "",
+          bulkOrderNote: product?.bulkOrderNote || "",
+          selectedColor: normalizedSelectedColor,
+          selectedSize: normalizedSelectedSize,
+          variant: selectedVariant
+            ? {
+                id: String(selectedVariant._id || ""),
+                name: selectedVariant.name || "",
+                color: selectedVariant.color || null,
+                size: selectedVariant.size || null,
+              }
+            : null,
+          colorSnapshot,
+          sizeSnapshot,
+          specifications: Array.isArray(product?.specifications) ? product.specifications : [],
+          shippingRules: Array.isArray(product?.shippingRules) ? product.shippingRules : [],
+        },
+      });
+
+      await buyNowSession.save();
+
+      /*
+       * Do not depend on a custom Mongoose instance method here.
+       * Some deployed versions of BuyNowSession do not register
+       * toCheckoutJSON(), which caused Buy Now to return HTTP 500.
+       */
+      const snapshot =
+        buyNowSession?.snapshot?.toObject
+          ? buyNowSession.snapshot.toObject()
+          : buyNowSession?.snapshot || {};
+
+      return res.json({
+        success: true,
+        message: "Buy now session created successfully.",
+        sessionId: String(buyNowSession._id),
+        item: {
+          _id: String(buyNowSession._id),
+          isBuyNow: true,
+          sessionId: String(buyNowSession._id),
+          productId: String(buyNowSession.productId),
+          quantity: Number(buyNowSession.quantity || 1),
+          selectedColor: buyNowSession.selectedColor || "",
+          selectedSize: buyNowSession.selectedSize || "",
+          variantId: buyNowSession.variantId ? String(buyNowSession.variantId) : "",
+          title: snapshot.title || "Product",
+          slug: snapshot.slug || "",
+          imageUrl: snapshot.imageUrl || "",
+          images: Array.isArray(snapshot.images) ? snapshot.images : [],
+          price: Number(snapshot.finalPrice || finalPrice),
+          regularPrice: Number(snapshot.regularPrice || baseRegularPrice),
+          salePrice: snapshot.salePrice ?? null,
+          variantRegularPrice: snapshot.variantRegularPrice ?? null,
+          variantSalePrice: snapshot.variantSalePrice ?? null,
+          sellingMode: snapshot.sellingMode || "piece",
+          priceUnit: snapshot.priceUnit || "",
+          bulkOrderNote: snapshot.bulkOrderNote || "",
+          specifications: Array.isArray(snapshot.specifications) ? snapshot.specifications : [],
+          snapshot,
+        },
+      });
+    } catch (error) {
+      console.error("Buy now error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to prepare buy now order.",
+      });
+    }
+  }
+);
 
 module.exports = router;

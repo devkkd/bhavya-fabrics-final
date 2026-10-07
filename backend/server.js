@@ -46,6 +46,11 @@ const {
 const { startSaleExpiryWatcher } =
   require("./services/saleExpiryWatcher");
 
+const { startProductSaleExpiryWatcher } =
+  require("./services/productSaleExpiryWatcher");
+
+  const heroSettingsRoutes = require("./routes/heroSettings");
+
 const app = express();
 
 const PORT = process.env.PORT || 5001;
@@ -260,6 +265,11 @@ app.use(
   "/api/contact-inquiries",
   contactInquiryRoutes
 );
+app.use(
+  "/api/hero-settings",
+  heroSettingsRoutes
+);
+
 /*
 |--------------------------------------------------------------------------
 | 404 Handler
@@ -337,7 +347,11 @@ await verifyMailer();
     |--------------------------------------------------------------------------
     */
 
+    /* Existing Sale Timer + Subscribe/Notify watcher — unchanged. */
     startSaleExpiryWatcher();
+
+    /* Separate watcher for individual product-sale expiry. */
+    startProductSaleExpiryWatcher();
 
     /*
     |--------------------------------------------------------------------------

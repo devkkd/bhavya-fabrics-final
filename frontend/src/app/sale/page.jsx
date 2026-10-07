@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -161,6 +162,11 @@ function normalizeColorOption(value) {
     name: name || optionValue,
     value: optionValue || name,
     hex: hex || optionValue || name,
+    regularPrice: Number(value?.regularPrice ?? 0) || 0,
+    salePrice: Number(value?.salePrice ?? 0) || 0,
+    images: Array.isArray(value?.images)
+      ? value.images.map(normalizeImageValue).filter(Boolean)
+      : [],
   };
 }
 
@@ -387,6 +393,15 @@ function normalizeProduct(item) {
     colorOptions,
     sizeOptions,
     variants,
+    sellingMode:
+      item?.sellingMode === "meter"
+        ? "meter"
+        : "piece",
+    meterConfig:
+      item?.meterConfig || {},
+    bulkOrderNote:
+      item?.bulkOrderNote || "",
+    showOnSale: Boolean(item?.showOnSale),
     variantsEnabled: Boolean(item?.variantsEnabled || variants.length > 0),
   };
 }
@@ -659,11 +674,13 @@ function SaleActionButton({
 ========================================================= */
 
 export default function SalePage() {
+  const router = useRouter();
   const {
     addToCart,
     items: cartItems = [],
     updateQuantity,
     removeItem,
+    prepareBuyNow,
   } = useCart();
   const { toggleSave, isSaved: isProductSaved } = useWishlist();
   /*
@@ -1405,6 +1422,7 @@ console.log(
 
   const getDisplayPricing = (product) => {
     const variant = getSelectedVariant(product);
+    const selectedColor = getSelectedColor(product);
 
     if (variant) {
       const regular = Number(variant.regularPrice || 0);
@@ -1418,6 +1436,26 @@ console.log(
           ? Math.max(1, Math.round(((regular - sale) / regular) * 100))
           : 0,
       };
+    }
+
+    if (selectedColor) {
+      const regular = Number(selectedColor.regularPrice || 0);
+      const sale = Number(selectedColor.salePrice || 0);
+      const onSale =
+        Boolean(product?.showOnSale) &&
+        sale > 0 &&
+        regular > 0 &&
+        sale < regular;
+
+      if (regular > 0 || sale > 0) {
+        return {
+          original: onSale ? regular : 0,
+          sale: onSale ? sale : regular || product.price || 0,
+          discount: onSale
+            ? Math.max(1, Math.round(((regular - sale) / regular) * 100))
+            : 0,
+        };
+      }
     }
 
     return {
@@ -1763,25 +1801,56 @@ console.log(
      BUY NOW
   ======================================================= */
 
-  const handleBuyNow = (id) => {
+  const handleBuyNow = async (id) => {
     if (buyingProduct) {
       return;
     }
 
     setBuyingProduct(id);
 
-    window.setTimeout(() => {
-      const item =
-        saleItems.find(
-          (product) =>
-            product.id === id
-        );
+    const item =
+      saleItems.find(
+        (product) =>
+          product.id === id
+      );
 
-      if (item) {
-        window.location.href =
-          `/products/${item.slug}`;
-      }
-    }, 500);
+    if (!item) {
+      setBuyingProduct(null);
+      return;
+    }
+
+    const selectedColor = selectedColors[id] || "";
+    const selectedSize = selectedSizes[id] || "";
+
+    const result =
+      await prepareBuyNow(
+        item,
+        1,
+        {
+          selectedColor,
+          selectedSize,
+          variantId: "",
+        }
+      );
+
+    if (result?.loginRequired) {
+      setBuyingProduct(null);
+      setCartMessages((prev) => ({
+        ...prev,
+        [id]: "Please login to buy now",
+      }));
+      return;
+    }
+
+    if (result?.success) {
+      router.push(`/checkout?buyNowSessionId=${result?.sessionId || ""}`);
+    } else {
+      setBuyingProduct(null);
+      setCartMessages((prev) => ({
+        ...prev,
+        [id]: result?.message || "Unable to buy now",
+      }));
+    }
   };
 
   /* =======================================================
@@ -5664,13 +5733,16 @@ console.log(
                 const isBuying =
                   buyingProduct === product.id;
 
-                const image =
-                  product.images?.[0] ||
-                  "/images/home/products/1.png";
-
                 const selectedColor = getSelectedColor(product);
                 const selectedSize = getSelectedSize(product);
                 const selectedVariant = getSelectedVariant(product);
+                const selectedColorImages =
+                  selectedColor?.images || [];
+                const image =
+                  selectedVariant?.images?.[0] ||
+                  selectedColorImages?.[0] ||
+                  product.images?.[0] ||
+                  "/images/home/products/1.png";
                 const displayPricing = getDisplayPricing(product);
                 const availableSizes = getAvailableSizes(product);
                 const cardMessage = cartMessages[String(product.id)] || "";
@@ -5756,10 +5828,12 @@ console.log(
 
                         <div className="sale-spec">
                           <span className="sale-spec-label">
-                            MOQ
+                            {product.sellingMode === "meter" ? "FOLD" : "TYPE"}
                           </span>
                           <span className="sale-spec-value">
-                            {formatNumber(product.moq)} Metres
+                            {product.sellingMode === "meter"
+                              ? product.meterConfig?.foldLength || "—"
+                              : "Ready-made"}
                           </span>
                         </div>
                       </div>
