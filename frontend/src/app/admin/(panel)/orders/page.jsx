@@ -115,9 +115,11 @@ const getItemImage = (item) => {
 
 
 const getItemColor = (item) => {
-
-  return getColorName(item?.selectedColor) || getColorName(item?.variantSnapshot?.color);
-
+  return (
+    getColorName(item?.selectedColor) ||
+    getColorName(item?.variantSnapshot?.color) ||
+    getColorName(item?.snapshot?.selectedColor)
+  );
 };
 
 
@@ -2943,19 +2945,17 @@ export default function OrdersPage() {
 
                 {selectedOrder.items?.map((item, idx) => (
 
-
-
                   <div
 
-                    key={idx}
+                    key={`item-${idx}`}
 
                     style={{
 
                       display: "flex",
 
-                      justifyContent: "space-between",
+                      flexDirection: "column",
 
-                      gap: "16px",
+                      gap: "0",
 
                       paddingBottom: "12px",
 
@@ -2979,15 +2979,29 @@ export default function OrdersPage() {
 
                         display: "flex",
 
-                        gap: "12px",
+                        justifyContent: "space-between",
 
-                        minWidth: 0,
-
-                        flex: 1,
+                        gap: "16px",
 
                       }}
 
                     >
+
+                      <div
+
+                        style={{
+
+                          display: "flex",
+
+                          gap: "12px",
+
+                          minWidth: 0,
+
+                          flex: 1,
+
+                        }}
+
+                      >
 
                       {getItemImage(item) ? (
 
@@ -3055,7 +3069,7 @@ export default function OrdersPage() {
 
                       <div style={{ minWidth: 0 }}>
 
-                        <div style={{ fontWeight: "700", marginBottom: "5px" }}>
+                        <div style={{ fontWeight: "700", marginBottom: "8px", fontSize: "13px" }}>
 
                           {item.productName || "Product"}
 
@@ -3071,61 +3085,43 @@ export default function OrdersPage() {
 
                             fontSize: "11px",
 
-                            lineHeight: "1.7",
+                            lineHeight: "1.8",
 
                           }}
 
                         >
 
-                          Quantity: {item.quantity || 0}
+                          {item.shippingDetails?.sellingMode === "meter" ? (
+                            <div>
+                              Meters: <strong>{item.quantity || 0} m</strong>
+                            </div>
+                          ) : (
+                            <div>QTY: <strong>{item.quantity || 0}</strong></div>
+                          )}
 
-                          {getItemColor(item) ? (
 
-                            <>
 
-                              <br />
+                          {getItemColor(item) && (
 
-                              Color: {getItemColor(item)}
+                            <div>Color: <strong>{getItemColor(item)}</strong></div>
 
-                            </>
+                          )}
 
-                          ) : null}
 
-                          {getItemSize(item) ? (
 
-                            <>
+                          {getItemSize(item) && (
 
-                              <br />
+                            <div>Size: <strong>{getItemSize(item)}</strong></div>
 
-                              Size: {getItemSize(item)}
+                          )}
 
-                            </>
 
-                          ) : null}
 
-                          {getItemSku(item) ? (
+                          {getItemSku(item) && (
 
-                            <>
+                            <div>SKU: <strong>{getItemSku(item)}</strong></div>
 
-                              <br />
-
-                              SKU: {getItemSku(item)}
-
-                            </>
-
-                          ) : null}
-
-                          {item.variantId ? (
-
-                            <>
-
-                              <br />
-
-                              Variant ID: {String(item.variantId)}
-
-                            </>
-
-                          ) : null}
+                          )}
 
                         </div>
 
@@ -3153,9 +3149,93 @@ export default function OrdersPage() {
 
                     </div>
 
+                    </div>
+
+
+
+                    {item.shippingDetails && (
+
+                    <div
+
+                      key={`specs-${idx}`}
+
+                      style={{
+
+                        marginBottom: "12px",
+
+                        paddingTop: "8px",
+
+                        paddingBottom: "8px",
+
+                        borderTop: "1px solid #E4DCD4",
+
+                        fontSize: "10px",
+
+                        color: "#77736D",
+
+                        lineHeight: "1.6",
+
+                      }}
+
+                    >
+
+                      {item.shippingDetails.sellingMode === "meter" && (
+
+                        <div>
+
+                          <strong>📏 METER MODE</strong>
+
+                          {item.shippingDetails.meterDetails?.foldLength && (
+
+                            <div style={{ marginTop: "4px", fontSize: "10px" }}>Fold: {item.shippingDetails.meterDetails.foldLength}</div>
+
+                          )}
+
+                          {item.shippingDetails.meterDetails?.minMeters && (
+
+                            <div style={{ marginTop: "4px", fontSize: "10px" }}>Range: {item.shippingDetails.meterDetails.minMeters}m to {item.shippingDetails.meterDetails?.maxMeters || "unlimited"}m</div>
+
+                          )}
+
+                        </div>
+
+                      )}
+
+                      {item.shippingDetails.sellingMode === "piece" && (
+
+                        <div>
+
+                          <strong>📦 PIECE/BAG MODE</strong>
+
+                        </div>
+
+                      )}
+
+                      {(item.shippingDetails.length || item.shippingDetails.breadth || item.shippingDetails.height) && (
+
+                        <div style={{ marginTop: "8px", fontSize: "10px" }}>
+
+                          <strong>Dimensions:</strong> {item.shippingDetails.length || "?"}cm × {item.shippingDetails.breadth || "?"}cm × {item.shippingDetails.height || "?"}cm
+
+                        </div>
+
+                      )}
+
+                      {item.shippingDetails.weight && (
+
+                        <div style={{ marginTop: "8px", fontSize: "10px" }}>
+
+                          <strong>Weight:</strong> {item.shippingDetails.weight} kg
+
+                        </div>
+
+                      )}
+
+                    </div>
+
+                  )}
+
                   </div>
-
-
 
                 ))}
 
@@ -3225,31 +3305,31 @@ export default function OrdersPage() {
 
                 <div>
 
-                  <strong>Shipping:</strong>{" "}
+                  <strong>Shipping Charges:</strong>{" "}
 
-                  {formatMoney(selectedOrder.pricing?.shipping)}
+                  {formatMoney(selectedOrder.pricing?.shippingCharges)}
 
                 </div>
 
                 <div>
 
-                  <strong>Tax:</strong>{" "}
+                  <strong>Tax (5%):</strong>{" "}
 
-                  {formatMoney(selectedOrder.pricing?.tax)}
+                  {formatMoney(selectedOrder.pricing?.taxAmount)}
 
                 </div>
 
-                <div style={{ fontSize: "14px", marginTop: "4px" }}>
+                <div style={{ fontSize: "14px", marginTop: "8px", paddingTop: "8px", borderTop: "1px solid #DDD" }}>
 
-                  <strong>Total:</strong>{" "}
+                  <strong>Grand Total:</strong>{" "}
 
                   {formatMoney(selectedOrder.pricing?.total)}
 
                 </div>
 
-                <div>
+                <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid #DDD" }}>
 
-                  <strong>Payment:</strong>{" "}
+                  <strong>Payment Method:</strong>{" "}
 
                   {selectedOrder.payment?.method || "N/A"}{" "}
 
@@ -3265,7 +3345,87 @@ export default function OrdersPage() {
 
                   <strong>Shipping Method:</strong>{" "}
 
-                  {selectedOrder.shippingMethod || "N/A"}
+                  {selectedOrder.shippingMethod?.toUpperCase() || "N/A"}
+
+                </div>
+
+              </div>
+
+            </div>
+
+
+
+            {/* Packing Guide for Admin */}
+
+            <div style={{ marginBottom: "25px" }}>
+
+              <h3 style={{ fontSize: "14px", fontWeight: "700", marginBottom: "12px", color: "#FFFFFF", background: "#295C65", padding: "10px 12px", borderRadius: "6px" }}>
+
+                📋 PACKING CHECKLIST
+
+              </h3>
+
+              <div style={{ padding: "14px", background: "#FFFBF0", border: "2px solid #F4D8B8", borderRadius: "6px", fontSize: "12px" }}>
+
+                <div style={{ lineHeight: "1.9", color: "#4A4A4A" }}>
+
+                  <div style={{ marginBottom: "8px" }}>
+
+                    <strong>Total Items:</strong> <span style={{ fontSize: "14px", fontWeight: "700" }}>{selectedOrder.items?.length || 0}</span> product{selectedOrder.items?.length !== 1 ? "s" : ""}
+
+                  </div>
+
+                  {selectedOrder.items?.some(
+                    (item) => item.shippingDetails?.sellingMode === "meter"
+                  ) && (
+                    <div style={{ marginBottom: "8px" }}>
+                      <strong>Total Fabric:</strong>{" "}
+                      <span style={{ fontSize: "14px", fontWeight: "700" }}>
+                        {selectedOrder.items
+                          .filter((item) => item.shippingDetails?.sellingMode === "meter")
+                          .reduce((sum, item) => sum + Number(item.quantity || 0), 0)}{" "}
+                        m
+                      </span>
+                    </div>
+                  )}
+
+                  {selectedOrder.items?.some(
+                    (item) => item.shippingDetails?.sellingMode !== "meter"
+                  ) && (
+                    <div style={{ marginBottom: "8px" }}>
+                      <strong>Total Qty:</strong>{" "}
+                      <span style={{ fontSize: "14px", fontWeight: "700" }}>
+                        {selectedOrder.items
+                          .filter((item) => item.shippingDetails?.sellingMode !== "meter")
+                          .reduce((sum, item) => sum + Number(item.quantity || 0), 0)}
+                      </span>{" "}
+                      pieces to pack
+                    </div>
+                  )}
+
+                  <div style={{ marginBottom: "8px" }}>
+
+                    <strong>Receiver:</strong> {selectedOrder.shippingAddress?.fullName}
+
+                  </div>
+
+                  <div style={{ marginBottom: "8px" }}>
+
+                    <strong>Delivery To:</strong> {selectedOrder.shippingAddress?.city}, {selectedOrder.shippingAddress?.state} {selectedOrder.shippingAddress?.pincode}
+
+                  </div>
+
+                  <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "2px solid #E8D4B8" }}>
+
+                    <strong style={{ color: "#8B4513", fontSize: "13px" }}>💰 Order Value:</strong> <span style={{ fontSize: "15px", fontWeight: "700", color: "#295C65" }}>{formatMoney(selectedOrder.pricing?.total)}</span>
+
+                  </div>
+
+                  <div style={{ marginTop: "8px", fontSize: "10px", color: "#696968", fontStyle: "italic" }}>
+
+                    Shipping: {selectedOrder.shippingMethod?.toUpperCase()} | Tax Included
+
+                  </div>
 
                 </div>
 

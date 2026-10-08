@@ -756,6 +756,21 @@ const getCustomProductShipping = (product, cartItem, shippingMethod) => {
       )
     : null;
 
+  if (product?.sellingMode === "piece") {
+    const quantity = Number(cartItem?.quantity || 0);
+    const rule = rules.find((item) => {
+      if (item?.type !== "quantity") return false;
+      const min = item?.minQuantity == null ? 0 : Number(item.minQuantity);
+      const max = item?.maxQuantity == null ? Infinity : Number(item.maxQuantity);
+      return quantity >= min && quantity <= max;
+    });
+    if (rule) {
+      return shippingMethod === "express"
+        ? Number(rule.expressCharge || 0)
+        : Number(rule.standardCharge || 0);
+    }
+  }
+
   const directCharge =
     configuredSize?.shippingCharge ??
     variantSize?.shippingCharge ??
@@ -770,13 +785,8 @@ const getCustomProductShipping = (product, cartItem, shippingMethod) => {
   }
 
   if (product?.sellingMode === "meter") {
-    const meters = Number(
-      configuredSize?.meters ??
-      variantSize?.meters ??
-      cartItem?.snapshot?.sizeMeters
-    );
-
-    if (Number.isFinite(meters)) {
+    const meters = Number(cartItem?.quantity || 0);
+    if (Number.isFinite(meters) && meters > 0) {
       const rule = rules.find((item) => {
         if (item?.type !== "meter") return false;
         const min = item?.minMeters == null ? 0 : Number(item.minMeters);
@@ -818,7 +828,7 @@ const calculateShippingCharges = async (cart, shippingMethod) => {
   for (const item of cart.items) {
     const product = await Product.findById(item.productId)
       .select(
-        "title sellingMode shippingRules options.sizes options.colors variants pricing showOnSale"
+        "title sellingMode meterConfig bulkOrderNote shippingRules options.sizes options.colors variants pricing showOnSale"
       )
       .lean();
 
@@ -984,15 +994,17 @@ const buildOrderItem = async (
 
 
 
-  const variant =
+  const isMeterProduct =
+    product?.sellingMode === "meter" ||
+    product?.meterConfig?.enabled === true;
 
-    findVariant(
-
-      product,
-
-      cartItem
-
-    );
+  /*
+   * Raw Fabric is not a variant product.
+   * Colour is informational/image selection for meter products.
+   */
+  const variant = isMeterProduct
+    ? null
+    : findVariant(product, cartItem);
 
 
 
@@ -1009,11 +1021,9 @@ const buildOrderItem = async (
 
 
   if (
-
+    !isMeterProduct &&
     cartItem.variantId &&
-
     !variant
-
   ) {
 
     throw new Error(
@@ -1039,101 +1049,46 @@ const buildOrderItem = async (
 
 
   if (
-
+    !isMeterProduct &&
     cartItem.selectedColor
-
   ) {
-
     const selectedColor =
-
       cartItem.selectedColor;
-
-
-
     const availableColors =
-
       product?.options
-
         ?.colors || [];
+    const activeVariants = Array.isArray(product?.variants)
+      ? product.variants.filter((item) => item?.active !== false)
+      : [];
+    const hasColorVariants = activeVariants.some((item) =>
+      Boolean(
+        item?.color?.name ||
+          item?.color?.value ||
+          item?.colorName ||
+          item?.colorValue
+      )
+    );
 
+    // A colour label alone does not make a base product unavailable.
+    // Only enforce it when colour is part of a real selectable variant.
+    if (hasColorVariants) {
+      const existsInOptions = availableColors.some((color) =>
+        optionMatches(color, selectedColor)
+      );
+      const variantColor = variant?.color || {
+        name: variant?.colorName,
+        value: variant?.colorValue,
+        hex: variant?.colorHex,
+      };
+      const existsInSelectedVariant =
+        variant && optionMatches(variantColor, selectedColor);
 
-
-    if (
-
-      availableColors.length >
-
-      0
-
-    ) {
-
-      const selectedName =
-
-        cleanString(
-
-          selectedColor.name ||
-
-            selectedColor.value
-
-        ).toLowerCase();
-
-
-
-      const exists =
-
-        availableColors.some(
-
-          (color) => {
-
-            const name =
-
-              cleanString(
-
-                color?.name
-
-              ).toLowerCase();
-
-
-
-            const value =
-
-              cleanString(
-
-                color?.value
-
-              ).toLowerCase();
-
-
-
-            return (
-
-              name ===
-
-                selectedName ||
-
-              value ===
-
-                selectedName
-
-            );
-
-          }
-
-        );
-
-
-
-      if (!exists) {
-
+      if (!existsInOptions && !existsInSelectedVariant) {
         throw new Error(
-
           `Selected colour is no longer available for "${product.title}".`
-
         );
-
       }
-
     }
-
   }
 
 
@@ -1150,7 +1105,7 @@ const buildOrderItem = async (
 
 
 
-  if (cartItem.selectedSize) {
+  if (!isMeterProduct && cartItem.selectedSize) {
     const selectedSize = normalizeSelectedOptionName(cartItem.selectedSize);
     const availableSizes = Array.isArray(product?.options?.sizes)
       ? product.options.sizes
@@ -1226,24 +1181,49 @@ const buildOrderItem = async (
 
 
 
-  if (
-
-    !Number.isInteger(
-
-      quantity
-
-    ) ||
-
-    quantity < 1
-
-  ) {
-
+  if (!Number.isFinite(quantity) || quantity < 1) {
     throw new Error(
-
       `Invalid quantity for "${product.title}".`
+    );
+  }
 
+  if (isMeterProduct) {
+    const config = product?.meterConfig || {};
+    const minMeters = Math.max(0.01, Number(config.minMeters ?? 1));
+    const maxMeters =
+      config.maxMeters == null ? 100 : Number(config.maxMeters);
+    const incrementMeters = Math.max(
+      0.01,
+      Number(config.incrementMeters ?? 1)
     );
 
+    if (quantity < minMeters) {
+      throw new Error(
+        `Minimum order is ${minMeters} meter${minMeters === 1 ? "" : "s"}.`
+      );
+    }
+
+    if (Number.isFinite(maxMeters) && quantity > maxMeters) {
+      throw new Error(
+        product?.bulkOrderNote ||
+          "Please contact our team for bulk orders."
+      );
+    }
+
+    const steps =
+      Math.round(
+        ((quantity - minMeters) / incrementMeters) * 1000000
+      ) / 1000000;
+
+    if (Math.abs(steps - Math.round(steps)) > 0.000001) {
+      throw new Error(
+        `Please order in increments of ${incrementMeters} meter${incrementMeters === 1 ? "" : "s"}.`
+      );
+    }
+  } else if (!Number.isInteger(quantity)) {
+    throw new Error(
+      `Invalid quantity for "${product.title}".`
+    );
   }
 
 
@@ -1289,11 +1269,8 @@ const buildOrderItem = async (
     }
 
   } else if (
-
-    product?.inventory
-
-      ?.trackStock
-
+    !isMeterProduct &&
+    product?.inventory?.trackStock
   ) {
 
     const stock =
@@ -1432,55 +1409,29 @@ const buildOrderItem = async (
 
 
 
-  const selectedColor =
-
-    cartItem.selectedColor
-
-      ? {
-
-          name:
-
-            cleanString(
-
-              cartItem
-
-                .selectedColor
-
-                .name
-
-            ),
-
-
-
-          value:
-
-            cleanString(
-
-              cartItem
-
-                .selectedColor
-
-                .value
-
-            ),
-
-
-
-          hex:
-
-            cleanString(
-
-              cartItem
-
-                .selectedColor
-
-                .hex
-
-            ),
-
-        }
-
-      : null;
+  const selectedColorValue = cartItem.selectedColor;
+  const selectedColorName = cleanString(
+    typeof selectedColorValue === "string"
+      ? selectedColorValue
+      : selectedColorValue?.name ||
+          selectedColorValue?.value ||
+          selectedColorValue?.label
+  );
+  const selectedColor = selectedColorName
+    ? {
+        name: selectedColorName,
+        value: cleanString(
+          typeof selectedColorValue === "object"
+            ? selectedColorValue?.value || selectedColorValue?.name
+            : selectedColorValue
+        ),
+        hex: cleanString(
+          typeof selectedColorValue === "object"
+            ? selectedColorValue?.hex
+            : ""
+        ),
+      }
+    : null;
 
 
 
@@ -1854,6 +1805,21 @@ const buildOrderItem = async (
 
 
     variantSnapshot,
+
+    shippingDetails: {
+      weight: product?.shipping?.weight || null,
+      length: product?.shipping?.length || null,
+      breadth: product?.shipping?.breadth || null,
+      height: product?.shipping?.height || null,
+      sellingMode: isMeterProduct
+        ? "meter"
+        : product?.sellingMode || "piece",
+      meterDetails: {
+        foldLength: product?.meterConfig?.foldLength || "",
+        minMeters: product?.meterConfig?.minMeters || null,
+        maxMeters: product?.meterConfig?.maxMeters || null,
+      },
+    },
 
   };
 
@@ -4486,28 +4452,144 @@ router.post(
         });
       }
 
-      /* Validate quantity */
-      const qty = Math.max(
-        1,
-        Math.min(100, Math.floor(Number(quantity) || 1))
-      );
+      /* Validate quantity.
+       * Raw Fabric is sold by meter, so preserve the selected meter value
+       * (including decimals) and use the admin-configured max.
+       * Ready-made remains whole-piece quantity.
+       */
+      const isMeterProduct =
+        product?.sellingMode === "meter" ||
+        product?.meterConfig?.enabled === true;
 
-      /* Handle variants if enabled */
-      let selectedVariant = null;
-      const variantsEnabled =
-        Boolean(product?.variantsEnabled) ||
-        (Array.isArray(product?.variants) &&
-          product.variants.length > 0);
+      const meterConfig = product?.meterConfig || {};
+      const configuredMeterMax =
+        meterConfig.maxMeters == null
+          ? 100
+          : Number(meterConfig.maxMeters);
 
-      if (variantsEnabled) {
-        const activeVariants = Array.isArray(
-          product?.variants
-        )
-          ? product.variants.filter(
-              (v) => v?.active !== false
+      const rawRequestedQuantity = Number(quantity);
+      const qty = isMeterProduct
+        ? Math.max(
+            0.01,
+            Math.min(
+              Number.isFinite(configuredMeterMax) && configuredMeterMax > 0
+                ? configuredMeterMax
+                : 100,
+              Math.round(
+                (Number.isFinite(rawRequestedQuantity) ? rawRequestedQuantity : 1) *
+                  100
+              ) / 100
             )
-          : [];
+          )
+        : Math.max(
+            1,
+            Math.min(
+              100,
+              Math.floor(
+                Number.isFinite(rawRequestedQuantity)
+                  ? rawRequestedQuantity
+                  : 1
+              )
+            )
+          );
 
+      /* Validate Raw Fabric meter rules on Buy Now itself. */
+      if (isMeterProduct) {
+        const minMeters = Math.max(
+          0.01,
+          Number(meterConfig.minMeters ?? 1)
+        );
+        const maxMeters =
+          meterConfig.maxMeters == null
+            ? 100
+            : Number(meterConfig.maxMeters);
+        const incrementMeters = Math.max(
+          0.01,
+          Number(meterConfig.incrementMeters ?? 1)
+        );
+
+        if (qty < minMeters) {
+          return res.status(400).json({
+            success: false,
+            message: `Minimum order is ${minMeters} meter${minMeters === 1 ? "" : "s"}.`,
+            code: "METER_MINIMUM",
+            minMeters,
+          });
+        }
+
+        if (Number.isFinite(maxMeters) && qty > maxMeters) {
+          return res.status(400).json({
+            success: false,
+            message:
+              product.bulkOrderNote ||
+              "Please contact our team for bulk orders.",
+            code: "METER_BULK",
+            maxMeters,
+          });
+        }
+
+        const steps = Math.round(
+          ((qty - minMeters) / incrementMeters) * 1000000
+        ) / 1000000;
+
+        if (
+          Math.abs(
+            steps - Math.round(steps)
+          ) > 0.000001
+        ) {
+          return res.status(400).json({
+            success: false,
+            message: `Please order in increments of ${incrementMeters} meter${incrementMeters === 1 ? "" : "s"}.`,
+            code: "METER_INCREMENT",
+            incrementMeters,
+          });
+        }
+      }
+
+      /* Handle Ready-made variants only */
+      let selectedVariant = null;
+      const activeVariants = Array.isArray(product?.variants)
+        ? product.variants.filter((variant) => variant?.active !== false)
+        : [];
+      const hasColorOptions =
+        Array.isArray(product?.options?.colors) &&
+        product.options.colors.length > 0;
+      const hasSizeOptions =
+        Array.isArray(product?.options?.sizes) &&
+        product.options.sizes.length > 0;
+      const hasVariantOptions = activeVariants.some((variant) =>
+        Boolean(
+          (typeof variant?.color === "string" && variant.color.trim()) ||
+          variant?.color?.name ||
+            variant?.color?.value ||
+            variant?.colorName ||
+            variant?.colorValue ||
+            (typeof variant?.size === "string" && variant.size.trim()) ||
+            variant?.size?.name ||
+            variant?.size?.value ||
+            variant?.sizeName ||
+            variant?.sizeValue
+        )
+      );
+      const hasSizeVariantOptions = activeVariants.some((variant) =>
+        Boolean(
+          (typeof variant?.size === "string" && variant.size.trim()) ||
+            variant?.size?.name ||
+            variant?.size?.value ||
+            variant?.sizeName ||
+            variant?.sizeValue
+        )
+      );
+      const hasColorVariantOptions = activeVariants.some((variant) =>
+        Boolean(
+          (typeof variant?.color === "string" && variant.color.trim()) ||
+            variant?.color?.name ||
+            variant?.color?.value ||
+            variant?.colorName ||
+            variant?.colorValue
+        )
+      );
+      if (!isMeterProduct) {
         /* Find variant by ID first */
         if (variantId && mongoose.Types.ObjectId.isValid(String(variantId))) {
           selectedVariant = activeVariants.find(
@@ -4521,7 +4603,13 @@ router.post(
             /* Normalize color comparison */
             let colorMatch = true;
             if (normalizedSelectedColor) {
-              const variantColorName = String(v?.color?.name || v?.color?.value || "").toLowerCase().trim();
+              const variantColorName = String(
+                v?.color?.name ||
+                  v?.color?.value ||
+                  v?.colorName ||
+                  v?.colorValue ||
+                  ""
+              ).toLowerCase().trim();
               const selectedColorLower = normalizedSelectedColor.toLowerCase();
               colorMatch = variantColorName === selectedColorLower || variantColorName.includes(selectedColorLower) || selectedColorLower.includes(variantColorName);
             }
@@ -4529,7 +4617,13 @@ router.post(
             /* Normalize size comparison */
             let sizeMatch = true;
             if (normalizedSelectedSize) {
-              const variantSizeName = String(v?.size?.name || v?.size?.value || "").toLowerCase().trim();
+              const variantSizeName = String(
+                v?.size?.name ||
+                  v?.size?.value ||
+                  v?.sizeName ||
+                  v?.sizeValue ||
+                  ""
+              ).toLowerCase().trim();
               const selectedSizeLower = normalizedSelectedSize.toLowerCase();
               sizeMatch = variantSizeName === selectedSizeLower || variantSizeName.includes(selectedSizeLower) || selectedSizeLower.includes(variantSizeName);
             }
@@ -4539,23 +4633,21 @@ router.post(
         }
 
         /* Validate variant selection if required */
-        const hasColorOptions =
-          Array.isArray(product?.options?.colors) &&
-          product.options.colors.length > 0;
-        const hasSizeOptions =
-          Array.isArray(product?.options?.sizes) &&
-          product.options.sizes.length > 0;
-
-        if (hasColorOptions && !selectedColor) {
+        if ((hasColorOptions || hasColorVariantOptions) && !selectedColor) {
           return res.status(400).json({
             success: false,
             message: "Please select a color.",
           });
         }
 
-        /* Size is optional. Do not block colour-only / No Size products. */
+        if ((hasSizeOptions || hasSizeVariantOptions) && !normalizedSelectedSize) {
+          return res.status(400).json({
+            success: false,
+            message: "Please select a size.",
+          });
+        }
 
-        if (!selectedVariant) {
+        if (hasVariantOptions && !selectedVariant) {
           return res.status(400).json({
             success: false,
             message:
@@ -4564,15 +4656,15 @@ router.post(
         }
 
         /* Check stock */
-        const variantStock = Number(selectedVariant.stock || 0);
-        if (variantStock <= 0) {
+        const variantStock = Number(selectedVariant?.stock || 0);
+        if (selectedVariant && variantStock <= 0) {
           return res.status(400).json({
             success: false,
             message: "Selected variant is out of stock.",
           });
         }
 
-        if (qty > variantStock) {
+        if (selectedVariant && qty > variantStock) {
           return res.status(400).json({
             success: false,
             message: `Only ${variantStock} units available for this variant.`,

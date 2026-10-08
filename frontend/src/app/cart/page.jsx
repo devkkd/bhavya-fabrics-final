@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -10,6 +11,9 @@ import {
   Trash2,
 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
+
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api";
 
 const COLORS = {
   teal: "#295C65",
@@ -22,6 +26,7 @@ const COLORS = {
 };
 
 export default function CartPage() {
+  const router = useRouter();
   const {
     items,
     itemCount,
@@ -31,14 +36,20 @@ export default function CartPage() {
     removeItem: ctxRemove,
   } = useCart();
 
-  const [buyNowLoading, setBuyNowLoading] =
-    useState(false);
+  const [shipping, setShipping] = useState(0);
+  const [shippingLoading, setShippingLoading] = useState(false);
 
   /* ── resolved cart from server items ── */
 
   const resolvedCart = useMemo(() => {
     return items.map((item) => {
       const snapshot = item?.snapshot || {};
+
+      /* Check if product is available */
+      const isAvailable =
+        item?.productAvailable === true ||
+        item?.productStatus === "published" ||
+        item?.product?.status === "published";
 
       /*
        * Variant-specific images are stored inside
@@ -226,6 +237,9 @@ export default function CartPage() {
           snapshot?.priceUnit ||
           "",
 
+        meterConfig:
+          snapshot?.meterConfig || null,
+
         colorName,
 
         colorHex,
@@ -236,6 +250,8 @@ export default function CartPage() {
           Number(
             item?.quantity || 1
           ),
+
+        unavailable: !isAvailable,
       };
     });
   }, [items]);
@@ -245,17 +261,54 @@ export default function CartPage() {
   const subtotal = useMemo(() => {
     return resolvedCart.reduce(
       (sum, item) =>
-        sum +
-        item.price *
-          item.cartQuantity,
+        item.unavailable
+          ? sum
+          : sum + item.price * item.cartQuantity,
       0
     );
   }, [resolvedCart]);
+  const hasUnavailableItems = resolvedCart.some(
+    (item) => item.unavailable
+  );
 
-  const shipping = 0;
+  useEffect(() => {
+    let cancelled = false;
 
-  const total =
-    subtotal + shipping;
+    const loadShipping = async () => {
+      if (!isLoggedIn || !resolvedCart.length) {
+        setShipping(0);
+        return;
+      }
+
+      setShippingLoading(true);
+      try {
+        const response = await fetch(`${API_URL}/payments/shipping-preview`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+          cache: "no-store",
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!cancelled) {
+          setShipping(
+            response.ok && data?.success
+              ? Number(data?.shipping?.standard ?? 0)
+              : 0
+          );
+        }
+      } catch {
+        if (!cancelled) setShipping(0);
+      } finally {
+        if (!cancelled) setShippingLoading(false);
+      }
+    };
+
+    loadShipping();
+    return () => { cancelled = true; };
+  }, [isLoggedIn, resolvedCart]);
+
+  const total = subtotal + shipping;
 
   /* ── quantity update ── */
 
@@ -272,16 +325,28 @@ export default function CartPage() {
 
     if (!item) return;
 
-    const newQty = Math.max(
-      1,
-      item.cartQuantity +
-        change
+    const isMeter = item.sellingMode === "meter";
+    const min = isMeter
+      ? Math.max(1, Number(item.meterConfig?.minMeters ?? 1))
+      : 1;
+    const max = isMeter
+      ? Math.max(min, Number(item.meterConfig?.maxMeters ?? 100))
+      : 100;
+    const step = isMeter
+      ? Math.max(0.01, Number(item.meterConfig?.incrementMeters ?? 1))
+      : 1;
+
+    const newQty = Math.min(
+      max,
+      Math.max(
+        min,
+        Math.round((item.cartQuantity + change * step) * 100) / 100
+      )
     );
 
-    ctxUpdateQty(
-      itemId,
-      newQty
-    );
+    if (newQty !== item.cartQuantity) {
+      ctxUpdateQty(itemId, newQty);
+    }
   };
 
   const removeItem = (
@@ -290,24 +355,7 @@ export default function CartPage() {
     ctxRemove(itemId);
   };
 
-  const handleBuyNow = () => {
-    if (
-      buyNowLoading ||
-      resolvedCart.length === 0
-    ) {
-      return;
-    }
 
-    setBuyNowLoading(true);
-
-    if (
-      typeof window !==
-      "undefined"
-    ) {
-      window.location.href =
-        "/checkout";
-    }
-  };
 
   return (
     <main className="cart-page">
@@ -1475,7 +1523,15 @@ export default function CartPage() {
                         href={`/products/${item.slug}`}
                         className="cart-item-name"
                       >
-                        {item.name}
+                        {item.unavailable ? (
+
+                          <span style={{ color: "#ff6b6b" }}>⚠️ {item.name} - Product Unavailable</span>
+
+                        ) : (
+
+                          item.name
+
+                        )}
                       </Link>
 
                       <span className="cart-item-meta">
@@ -1552,7 +1608,11 @@ export default function CartPage() {
                       )}
 
                       <span className="cart-item-price">
-                        ₹{item.price}
+                        {item.unavailable
+                          ? "Unavailable — excluded from total"
+                          : item.sellingMode === "meter"
+                          ? `${item.cartQuantity}m × ₹${Number(item.price || 0).toLocaleString("en-IN")}/m = ₹${(Number(item.price || 0) * Number(item.cartQuantity || 0)).toLocaleString("en-IN")}`
+                          : `${item.cartQuantity} unit${Number(item.cartQuantity || 0) === 1 ? "" : "s"} × ₹${Number(item.price || 0).toLocaleString("en-IN")} = ₹${(Number(item.price || 0) * Number(item.cartQuantity || 0)).toLocaleString("en-IN")}`}
                       </span>
 
                     </div>
@@ -1569,13 +1629,18 @@ export default function CartPage() {
                             -1
                           )
                         }
+                        disabled={
+                          item.unavailable ||
+                          (item.sellingMode === "meter" &&
+                          item.cartQuantity <= Math.max(1, Number(item.meterConfig?.minMeters ?? 1)))
+                        }
                         aria-label="Decrease quantity"
                       >
                         <Minus size={14} />
                       </button>
 
                       <span className="cart-quantity-value">
-                        {item.cartQuantity}
+                        {item.cartQuantity}{item.sellingMode === "meter" ? "m" : ""}
                       </span>
 
                       <button
@@ -1586,6 +1651,7 @@ export default function CartPage() {
                             1
                           )
                         }
+                        disabled={item.unavailable}
                         aria-label="Increase quantity"
                       >
                         <Plus size={14} />
@@ -1650,7 +1716,7 @@ export default function CartPage() {
                 </span>
 
                 <strong>
-                  ₹{shipping}
+                  {shippingLoading ? "Calculating…" : `₹${shipping.toLocaleString("en-IN")}`}
                 </strong>
 
               </div>
@@ -1669,59 +1735,40 @@ export default function CartPage() {
 
               </div>
 
-              {/* BUY NOW */}
+
+
+              {/* BUY NOW / CHECKOUT */}
 
               <button
                 type="button"
                 className="cart-summary-button"
-                onClick={handleBuyNow}
+                onClick={() => router.push("/checkout")}
                 disabled={
-                  buyNowLoading
+                  !resolvedCart.some((item) => !item.unavailable) ||
+                  hasUnavailableItems
                 }
               >
-
                 <span className="cart-button-stage">
-
-                  {buyNowLoading ? (
-
-                    <span
-                      className="cart-button-state"
-                      key="loading"
-                    >
-
-                      <ShoppingCart
-                        size={16}
-                      />
-
-                      <span>
-                        Processing...
-                      </span>
-
-                    </span>
-
-                  ) : (
-
-                    <span
-                      className="cart-button-state"
-                      key="buy"
-                    >
-
-                      <ArrowRight
-                        size={16}
-                        strokeWidth={2}
-                      />
-
-                      <span>
-                        Checkout
-                      </span>
-
-                    </span>
-
-                  )}
-
+                  <span className="cart-button-state" key="buy-now">
+                    <ShoppingCart size={16} strokeWidth={2} />
+                    <span>Buy Now</span>
+                  </span>
                 </span>
-
               </button>
+              {hasUnavailableItems && (
+                <p
+                  role="status"
+                  style={{
+                    margin: "10px 0 0",
+                    color: "#A64D4D",
+                    fontSize: "12px",
+                    lineHeight: 1.5,
+                    textAlign: "center",
+                  }}
+                >
+                  Remove unavailable products before checkout.
+                </p>
+              )}
 
               {/* CONTINUE SHOPPING */}
 

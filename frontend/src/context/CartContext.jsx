@@ -3,20 +3,19 @@
 
 
 import {
-
   createContext,
-
   useCallback,
-
   useContext,
-
   useEffect,
-
   useRef,
-
   useState,
-
 } from "react";
+import {
+  AUTH_CHANGED_EVENT,
+  AUTH_SYNC_KEY,
+  CART_SYNC_KEY,
+  broadcastStorefrontChange,
+} from "@/utils/storefrontSync";
 
 
 
@@ -219,14 +218,40 @@ export function CartProvider({ children }) {
 
 
   useEffect(() => {
-
     if (initialised.current) return;
-
     initialised.current = true;
-
     checkAuthAndLoad();
-
   }, [checkAuthAndLoad]);
+
+  useEffect(() => {
+    const syncVisibleCart = () => {
+      if (document.visibilityState === "visible") {
+        checkAuthAndLoad();
+      }
+    };
+
+    const handleStorage = (event) => {
+      if (event.key === AUTH_SYNC_KEY) {
+        checkAuthAndLoad();
+      } else if (event.key === CART_SYNC_KEY) {
+        loadCart();
+      }
+    };
+
+    window.addEventListener("focus", checkAuthAndLoad);
+    window.addEventListener("pageshow", checkAuthAndLoad);
+    window.addEventListener(AUTH_CHANGED_EVENT, checkAuthAndLoad);
+    window.addEventListener("storage", handleStorage);
+    document.addEventListener("visibilitychange", syncVisibleCart);
+
+    return () => {
+      window.removeEventListener("focus", checkAuthAndLoad);
+      window.removeEventListener("pageshow", checkAuthAndLoad);
+      window.removeEventListener(AUTH_CHANGED_EVENT, checkAuthAndLoad);
+      window.removeEventListener("storage", handleStorage);
+      document.removeEventListener("visibilitychange", syncVisibleCart);
+    };
+  }, [checkAuthAndLoad, loadCart]);
 
 
 
@@ -389,7 +414,7 @@ export function CartProvider({ children }) {
 
 
         if (response.ok && applyCartResponse(data)) {
-
+          broadcastStorefrontChange(CART_SYNC_KEY);
           return {
 
             success: true,
@@ -487,8 +512,9 @@ export function CartProvider({ children }) {
 
 
         const data = await response.json();
-
-        applyCartResponse(data);
+        if (applyCartResponse(data)) {
+          broadcastStorefrontChange(CART_SYNC_KEY);
+        }
 
       } catch {
 
@@ -539,8 +565,9 @@ export function CartProvider({ children }) {
 
 
         const data = await response.json();
-
-        applyCartResponse(data);
+        if (applyCartResponse(data)) {
+          broadcastStorefrontChange(CART_SYNC_KEY);
+        }
 
       } catch {
 
@@ -579,15 +606,12 @@ export function CartProvider({ children }) {
 
 
       setItems([]);
-
       setItemCount(0);
-
+      broadcastStorefrontChange(CART_SYNC_KEY);
     } catch {
-
       setItems([]);
-
       setItemCount(0);
-
+      broadcastStorefrontChange(CART_SYNC_KEY);
     }
 
   }, []);
@@ -923,13 +947,25 @@ export function CartProvider({ children }) {
             },
             body: JSON.stringify({
               productId: String(productId),
-              quantity: Math.max(
-                1,
-                Math.min(
-                  100,
-                  Math.floor(quantity || 1)
-                )
-              ),
+              quantity: (() => {
+                const isMeterProduct =
+                  productData?.sellingMode === "meter" ||
+                  productData?.meterConfig?.enabled === true;
+
+                const configuredMax = isMeterProduct
+                  ? Number(productData?.meterConfig?.maxMeters ?? 100)
+                  : 100;
+
+                return Math.max(
+                  1,
+                  Math.min(
+                    Number.isFinite(configuredMax) && configuredMax > 0
+                      ? configuredMax
+                      : 100,
+                    Math.round(Number(quantity || 1) * 100) / 100
+                  )
+                );
+              })(),
               selectedColor:
                 options?.selectedColor || "",
               selectedSize:

@@ -19,7 +19,7 @@ const buyNowSessionSchema = new mongoose.Schema(
       type: Number,
       required: true,
       min: 1,
-      max: 100,
+      max: 10000,
     },
 
     selectedColor: {

@@ -921,12 +921,25 @@ function normalizeProduct(item) {
 
     variants,
     colorOptions,
-    sizeOptions,
+    sizeOptions:
+      item?.sellingMode === "meter"
+        ? []
+        : sizeOptions,
     variantsEnabled:
-      Boolean(
-        item?.variantsEnabled ||
-          variants.length > 0
-      ),
+      item?.sellingMode === "meter"
+        ? false
+        : Boolean(
+            item?.variantsEnabled ||
+              variants.length > 0
+          ),
+
+    meterConfig:
+      item?.meterConfig || {
+        enabled: false,
+        minMeters: null,
+        maxMeters: null,
+        incrementMeters: null,
+      },
 
     inventory:
       item?.inventory ||
@@ -1131,6 +1144,10 @@ function CollectionPageContent() {
     updateQuantity,
     removeItem,
   } = useCart();
+  const {
+    toggleSave: toggleWishlistProduct,
+    isSaved: isProductSaved,
+  } = useWishlist();
 
   /* ===================================================
      URL
@@ -1200,11 +1217,6 @@ function CollectionPageContent() {
   ] = useState(false);
 
   const [
-    savedProducts,
-    setSavedProducts,
-  ] = useState([]);
-
-  const [
     hoveredProduct,
     setHoveredProduct,
   ] = useState(null);
@@ -1222,6 +1234,11 @@ function CollectionPageContent() {
   const [
     selectedSizes,
     setSelectedSizes,
+  ] = useState({});
+
+  const [
+    selectedMeterQuantities,
+    setSelectedMeterQuantities,
   ] = useState({});
 
   const [
@@ -1846,29 +1863,22 @@ function CollectionPageContent() {
       );
     };
 
-  /* ===================================================
-     SAVE PRODUCT
-  =================================================== */
-
   const toggleSave =
-    (id) => {
-      setSavedProducts(
-        (current) => {
-          if (
-            current.includes(id)
-          ) {
-            return current.filter(
-              (item) =>
-                item !== id
-            );
-          }
-
-          return [
-            ...current,
-            id,
-          ];
-        }
-      );
+    async (product) => {
+      const result = await toggleWishlistProduct(product?.id);
+      if (result?.loginRequired) {
+        setCardMessage(
+          normalizeProductId(product?.id),
+          "Please login to save this product"
+        );
+      } else if (!result?.success) {
+        setCardMessage(
+          normalizeProductId(product?.id),
+          result?.message || "Unable to update saved products"
+        );
+      } else {
+        setCardMessage(normalizeProductId(product?.id), "");
+      }
     };
 
   /* ===================================================
@@ -2000,6 +2010,8 @@ function CollectionPageContent() {
 
     const needsSize =
       product?.sizeOptions?.length > 0;
+
+    if (!needsColor && !needsSize) return null;
 
     if (needsColor && !selectedColor) {
       return null;
@@ -2165,6 +2177,146 @@ function CollectionPageContent() {
     return (
       Number(product?.price || 0)
     );
+  };
+
+  const getCardPricing = (product) => {
+    const variant = getSelectedVariant(product);
+    const selectedColor = getSelectedColor(product);
+
+    const regularFromColor =
+      selectedColor?.regularPrice != null
+        ? Number(selectedColor.regularPrice)
+        : 0;
+
+    const saleFromColor =
+      selectedColor?.salePrice != null
+        ? Number(selectedColor.salePrice)
+        : 0;
+
+    const regularFromVariant =
+      Number(variant?.regularPrice || 0);
+
+    const saleFromVariant =
+      Number(variant?.salePrice || 0);
+
+    const regularPrice =
+      regularFromVariant > 0
+        ? regularFromVariant
+        : regularFromColor > 0
+        ? regularFromColor
+        : Number(
+            product?.regularPrice ||
+              product?.price ||
+              0
+          );
+
+    const salePrice =
+      saleFromVariant > 0
+        ? saleFromVariant
+        : saleFromColor > 0
+        ? saleFromColor
+        : Number(product?.salePrice || 0);
+
+    const hasSale =
+      salePrice > 0 &&
+      regularPrice > 0 &&
+      salePrice < regularPrice;
+
+    const finalPrice =
+      hasSale ? salePrice : regularPrice;
+
+    const discount = hasSale
+      ? Math.round(
+          ((regularPrice - salePrice) /
+            regularPrice) *
+            100
+        )
+      : 0;
+
+    return {
+      regularPrice,
+      salePrice,
+      finalPrice,
+      hasSale,
+      discount,
+    };
+  };
+
+  const getMeterConfig = (product) => {
+    const config = product?.meterConfig || {};
+
+    const min = Math.max(
+      0.01,
+      Number(config?.minMeters ?? 1) || 1
+    );
+
+    const max = Math.max(
+      min,
+      Number(config?.maxMeters ?? min) || min
+    );
+
+    const step = Math.max(
+      0.01,
+      Number(config?.incrementMeters ?? 1) || 1
+    );
+
+    return { min, max, step };
+  };
+
+  const getMeterOptions = (product) => {
+    if (product?.sellingMode !== "meter") {
+      return [];
+    }
+
+    const { min, max, step } =
+      getMeterConfig(product);
+
+    const options = [];
+    let value = min;
+    let guard = 0;
+
+    while (
+      value <= max + 0.000001 &&
+      guard < 1000
+    ) {
+      options.push(
+        Number(value.toFixed(2))
+      );
+      value += step;
+      guard += 1;
+    }
+
+    if (
+      options.length === 0 ||
+      options[options.length - 1] !==
+        Number(max.toFixed(2))
+    ) {
+      options.push(Number(max.toFixed(2)));
+    }
+
+    return [...new Set(options)];
+  };
+
+  const getSelectedMeterQuantity = (product) => {
+    const id =
+      normalizeProductId(product?.id);
+
+    const options =
+      getMeterOptions(product);
+
+    const current =
+      Number(selectedMeterQuantities[id]);
+
+    if (
+      Number.isFinite(current) &&
+      options.includes(
+        Number(current.toFixed(2))
+      )
+    ) {
+      return current;
+    }
+
+    return options[0] || 1;
   };
 
   const getDisplayImages = (product) => {
@@ -2568,8 +2720,19 @@ function CollectionPageContent() {
           product
         );
 
+      const isMeter =
+        product?.sellingMode === "meter";
+
+      const meterQuantity =
+        isMeter
+          ? getSelectedMeterQuantity(product)
+          : 1;
+
       if (
+        !isMeter &&
         product?.variantsEnabled &&
+        (product?.colorOptions?.length > 0 ||
+          product?.sizeOptions?.length > 0) &&
         !selectedVariant
       ) {
         setCardMessage(
@@ -2603,7 +2766,9 @@ function CollectionPageContent() {
         const result =
           await addToCart(
             id,
-            1,
+            isMeter
+              ? meterQuantity
+              : 1,
             {
               selectedColor:
                 selectedColor ||
@@ -2712,27 +2877,43 @@ function CollectionPageContent() {
 
       if (!item) return;
 
+      const isMeter =
+        product?.sellingMode === "meter";
+
+      const { min, max, step } =
+        isMeter
+          ? getMeterConfig(product)
+          : {
+              min: 1,
+              max: Number.POSITIVE_INFINITY,
+              step: 1,
+            };
+
       const currentQuantity =
         Math.max(
-          1,
-          Number(
-            item?.quantity
-          ) || 1
+          min,
+          Number(item?.quantity) || min
         );
 
       if (
-        direction ===
-          "decrease" &&
-        currentQuantity <= 1
+        direction === "decrease" &&
+        currentQuantity <= min
       ) {
         return;
       }
 
-      const nextQuantity =
-        direction ===
-        "increase"
-          ? currentQuantity + 1
-          : currentQuantity - 1;
+      const rawNext =
+        direction === "increase"
+          ? currentQuantity + step
+          : currentQuantity - step;
+
+      const nextQuantity = Math.min(
+        max,
+        Math.max(
+          min,
+          Number(rawNext.toFixed(2))
+        )
+      );
 
       setCartStates(
         (current) => ({
@@ -3694,15 +3875,18 @@ function CollectionPageContent() {
         ===================================================== */
 
         .product-price {
+          display: none;
+        }
+
+        .product-discount-badge {
           position: absolute;
 
           top: 9px;
           right: 9px;
 
-          z-index: 4;
+          z-index: 5;
 
-          height: 31px;
-          min-height: 31px;
+          height: 30px;
 
           display: inline-flex;
           align-items: center;
@@ -3712,8 +3896,7 @@ function CollectionPageContent() {
 
           border-radius: 999px;
 
-          background: #295C65;
-
+          background: #D85C4A;
           color: #FFFFFF;
 
           font-family:
@@ -3721,10 +3904,11 @@ function CollectionPageContent() {
             Arial,
             sans-serif;
 
-          font-size: 11px;
+          font-size: 10px;
           line-height: 1;
 
-          font-weight: 600;
+          font-weight: 700;
+          letter-spacing: 0.3px;
 
           white-space: nowrap;
         }
@@ -3826,9 +4010,110 @@ function CollectionPageContent() {
           color: #295C65;
         }
 
+        .product-price-row {
+          width: 100%;
+          min-height: 31px;
+
+          display: flex;
+          align-items: baseline;
+          flex-wrap: wrap;
+
+          gap: 7px;
+
+          margin: 0 0 10px;
+        }
+
+        .product-sale-price {
+          color: #295C65;
+
+          font-family:
+            "Poppins",
+            Arial,
+            sans-serif;
+
+          font-size: 19px;
+          line-height: 24px;
+          font-weight: 700;
+        }
+
+        .product-actual-price {
+          color: #929292;
+
+          font-family:
+            "Poppins",
+            Arial,
+            sans-serif;
+
+          font-size: 11px;
+          line-height: 16px;
+          font-weight: 500;
+
+          text-decoration: line-through;
+        }
+
+        .product-unit {
+          color: #777777;
+
+          font-family:
+            "Poppins",
+            Arial,
+            sans-serif;
+
+          font-size: 10px;
+          line-height: 15px;
+          font-weight: 500;
+        }
+
+        .product-meter-row {
+          width: 100%;
+          min-height: 39px;
+
+          display: flex;
+          align-items: center;
+
+          gap: 9px;
+
+          margin: 1px 0 9px;
+        }
+
+        .product-meter-select {
+          min-width: 92px;
+          height: 32px;
+
+          padding: 0 28px 0 10px;
+
+          border: 1px solid #295C65;
+          border-radius: 7px;
+
+          background: #FFFFFF;
+          color: #295C65;
+
+          font-family:
+            "Poppins",
+            Arial,
+            sans-serif;
+
+          font-size: 10px;
+          font-weight: 600;
+
+          outline: none;
+          cursor: pointer;
+        }
+
+        .product-meter-select:focus {
+          box-shadow:
+            0 0 0 2px
+            rgba(
+              41,
+              92,
+              101,
+              0.12
+            );
+        }
+
         /* =====================================================
            SPECS
-        ===================================================== */
+        =====================================================
 
         .product-specs {
           width: 100%;
@@ -4876,18 +5161,6 @@ function CollectionPageContent() {
             height: 28px;
           }
 
-          .product-price {
-            top: 7px;
-            right: 7px;
-
-            height: 27px;
-            min-height: 27px;
-
-            padding: 0 8px;
-
-            font-size: 9px;
-          }
-
           .product-badge {
             left: 7px;
             bottom: 7px;
@@ -4899,6 +5172,16 @@ function CollectionPageContent() {
             font-size: 7.5px;
           }
 
+          .product-discount-badge {
+            top: 7px;
+            right: 7px;
+
+            height: 27px;
+            padding: 0 8px;
+
+            font-size: 8.5px;
+          }
+
           .product-name {
             height: 34px;
             min-height: 34px;
@@ -4908,6 +5191,43 @@ function CollectionPageContent() {
 
             font-size: 14px;
             line-height: 17px;
+          }
+
+          .product-price-row {
+            min-height: 27px;
+            gap: 5px;
+            margin-bottom: 7px;
+          }
+
+          .product-sale-price {
+            font-size: 17px;
+            line-height: 21px;
+          }
+
+          .product-actual-price {
+            font-size: 9px;
+            line-height: 13px;
+          }
+
+          .product-unit {
+            font-size: 8.5px;
+            line-height: 12px;
+          }
+
+          .product-meter-row {
+            min-height: 34px;
+            gap: 6px;
+            margin: 0 0 7px;
+          }
+
+          .product-meter-select {
+            min-width: 78px;
+            height: 29px;
+
+            padding-left: 8px;
+            padding-right: 22px;
+
+            font-size: 9px;
           }
 
           .product-specs {
@@ -5611,9 +5931,7 @@ function CollectionPageContent() {
                   (product) => {
 
                     const isSaved =
-                      savedProducts.includes(
-                        product.id
-                      );
+                      isProductSaved(product.id);
 
                     const isCartAdded =
                       cartStates[
@@ -5711,11 +6029,7 @@ function CollectionPageContent() {
                               }`
                             }
 
-                            onClick={() =>
-                              toggleSave(
-                                product.id
-                              )
-                            }
+                            onClick={() => toggleSave(product)}
 
                             aria-label={
                               isSaved
@@ -5740,32 +6054,24 @@ function CollectionPageContent() {
 
                           </button>
 
-                          {/* PRICE */}
+                          {(() => {
+                            const pricing =
+                              getCardPricing(product);
 
-                          <span className="product-price">
-                            ₹
-                            {
-                              new Intl.NumberFormat(
-                                "en-IN"
-                              ).format(
-                                getDisplayPrice(
-                                  product
-                                )
-                              )
-                            }
-                          </span>
-
-                          {/* BADGE */}
-
-                          {product.badge && (
-
-                            <span className="product-badge">
-                              {
-                                product.badge
-                              }
-                            </span>
-
-                          )}
+                            return (
+                              <>
+                                {pricing.hasSale ? (
+                                  <span className="product-discount-badge">
+                                    {pricing.discount}% OFF
+                                  </span>
+                                ) : product.badge ? (
+                                  <span className="product-badge">
+                                    {product.badge}
+                                  </span>
+                                ) : null}
+                              </>
+                            );
+                          })()}
 
                         </div>
 
@@ -5784,39 +6090,86 @@ function CollectionPageContent() {
                             }
                           </Link>
 
-                          {/* SPECS */}
+                          {/* PRICE */}
 
-                          <div className="product-specs">
+                          {(() => {
+                            const pricing =
+                              getCardPricing(product);
 
-                            <div className="product-spec">
+                            return (
+                              <div className="product-price-row">
+                                <span className="product-sale-price">
+                                  ₹
+                                  {new Intl.NumberFormat(
+                                    "en-IN"
+                                  ).format(
+                                    pricing.finalPrice
+                                  )}
+                                </span>
 
-                              <span className="product-spec-label">
-                                GSM
+                                {pricing.hasSale ? (
+                                  <span className="product-actual-price">
+                                    ₹
+                                    {new Intl.NumberFormat(
+                                      "en-IN"
+                                    ).format(
+                                      pricing.regularPrice
+                                    )}
+                                  </span>
+                                ) : null}
+
+                                <span className="product-unit">
+                                  {product.sellingMode === "meter"
+                                    ? "/ Meter"
+                                    : "/ Piece"}
+                                </span>
+                              </div>
+                            );
+                          })()}
+
+                          {/* METER SELECTOR */}
+
+                          {product?.sellingMode === "meter" ? (
+                            <div className="product-meter-row">
+                              <span className="product-colors-label">
+                                METER
                               </span>
 
-                              <span className="product-spec-value">
-                                {
-                                  product.gsm
-                                }
-                              </span>
+                              <select
+                                className="product-meter-select"
+                                value={getSelectedMeterQuantity(product)}
+                                onChange={(event) => {
+                                  const value =
+                                    Number(event.target.value);
 
+                                  setSelectedMeterQuantities(
+                                    (current) => ({
+                                      ...current,
+                                      [normalizeProductId(product?.id)]:
+                                        value,
+                                    })
+                                  );
+
+                                  setCardMessage(
+                                    normalizeProductId(product?.id),
+                                    ""
+                                  );
+                                }}
+                                aria-label={`Select meter quantity for ${product.name}`}
+                              >
+                                {getMeterOptions(product).map(
+                                  (meters) => (
+                                    <option
+                                      key={`${product.id}-meter-${meters}`}
+                                      value={meters}
+                                    >
+                                      {meters} m
+                                    </option>
+                                  )
+                                )}
+                              </select>
                             </div>
-
-                            <div className="product-spec">
-
-                              <span className="product-spec-label">
-                                WIDTH
-                              </span>
-
-                              <span className="product-spec-value">
-                                {
-                                  product.width
-                                }
-                              </span>
-
-                            </div>
-
-                          </div>
+                          ) : null}
 
                           {/* COLOR + SIZE SELECTORS */}
 
@@ -5909,7 +6262,8 @@ function CollectionPageContent() {
                                 </div>
                               ) : null}
 
-                              {product.sizeOptions?.length > 0 ? (
+                              {product.sellingMode !== "meter" &&
+                              product.sizeOptions?.length > 0 ? (
                                 <div className="product-variant-group">
 
                                   <div className="product-variant-header">
@@ -6080,10 +6434,11 @@ function CollectionPageContent() {
                                         </button>
 
                                         <span className="cart-inline-number">
-                                          {
-                                            item?.quantity ||
-                                            1
-                                          }
+                                          {product?.sellingMode === "meter"
+                                            ? `${Number(item?.quantity || 1)
+                                                .toFixed(2)
+                                                .replace(/\.00$/, "")} m`
+                                            : item?.quantity || 1}
                                         </span>
 
                                         <button

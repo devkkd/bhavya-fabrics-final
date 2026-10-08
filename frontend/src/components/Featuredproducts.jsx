@@ -220,7 +220,8 @@ function normalizeBackendProduct(item) {
   const colorOptions = Array.from(
     new Map(
       colorSource.map((color, index) => {
-        const name = getOptionName(color) || `Color ${index + 1}`;
+        const name = getOptionName(color);
+        if (!name) return null;
         const value = getOptionValue(color) || name;
         const hex = getOptionHex(color) || "#D9D1C7";
 
@@ -236,7 +237,7 @@ function normalizeBackendProduct(item) {
               : [],
           },
         ];
-      })
+      }).filter(Boolean)
     ).values()
   );
 
@@ -269,7 +270,8 @@ function normalizeBackendProduct(item) {
   const sizeOptions = Array.from(
     new Map(
       rawSizes.map((size, index) => {
-        const name = getOptionName(size) || `Size ${index + 1}`;
+        const name = getOptionName(size);
+        if (!name) return null;
         const value = getOptionValue(size) || name;
 
         return [
@@ -285,7 +287,7 @@ function normalizeBackendProduct(item) {
             salePrice: size?.salePrice ?? null,
           },
         ];
-      })
+      }).filter(Boolean)
     ).values()
   );
 
@@ -465,6 +467,13 @@ function ProductCard({ product }) {
       return null;
     }
 
+    if (
+      !product?.colorOptions?.length &&
+      !product?.sizeOptions?.length
+    ) {
+      return null;
+    }
+
     return (
       product.variants.find((variant) => {
         const colorMatches = selectedColor
@@ -619,6 +628,8 @@ function ProductCard({ product }) {
     if (
       product?.variantsEnabled &&
       product?.variants?.length > 0 &&
+      (product?.colorOptions?.length > 0 ||
+        product?.sizeOptions?.length > 0) &&
       !selectedVariant
     ) {
       flashMessage("Please select a valid colour and size");

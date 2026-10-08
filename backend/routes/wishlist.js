@@ -34,12 +34,28 @@ async function getOrCreateWishlist(customerId) {
 }
 
 /* ── serialize for frontend ── */
-function serializeWishlist(list) {
+async function serializeWishlist(list) {
+  const productIds = [
+    ...new Set(list.items.map((item) => String(item.productId))),
+  ];
+  const products = productIds.length
+    ? await Product.find({ _id: { $in: productIds } })
+        .select("_id status")
+        .lean()
+    : [];
+  const productStatuses = new Map(
+    products.map((product) => [String(product._id), product.status])
+  );
+
   return {
     _id:       list._id,
     items:     list.items.map((item) => ({
       _id:       item._id,
       productId: item.productId,
+      productStatus:
+        productStatuses.get(String(item.productId)) || "unavailable",
+      productAvailable:
+        productStatuses.get(String(item.productId)) === "published",
       savedAt:   item.savedAt,
       ...item.snapshot,
     })),
@@ -57,7 +73,7 @@ function serializeWishlist(list) {
 router.get("/", customerAuth, async (req, res) => {
   try {
     const list = await getOrCreateWishlist(req.customerId);
-    return res.json({ success: true, wishlist: serializeWishlist(list) });
+    return res.json({ success: true, wishlist: await serializeWishlist(list) });
   } catch (err) {
     console.error("GET /wishlist error:", err);
     return res.status(500).json({ success: false, message: "Failed to load wishlist" });
@@ -93,7 +109,7 @@ router.post("/items", customerAuth, async (req, res) => {
       return res.json({
         success:  true,
         message:  "Already in wishlist",
-        wishlist: serializeWishlist(list),
+        wishlist: await serializeWishlist(list),
       });
     }
 
@@ -103,7 +119,7 @@ router.post("/items", customerAuth, async (req, res) => {
     return res.json({
       success:  true,
       message:  "Added to wishlist",
-      wishlist: serializeWishlist(list),
+      wishlist: await serializeWishlist(list),
     });
   } catch (err) {
     console.error("POST /wishlist/items error:", err);
@@ -131,7 +147,11 @@ router.delete("/items/:productId", customerAuth, async (req, res) => {
     }
 
     await list.save();
-    return res.json({ success: true, message: "Removed from wishlist", wishlist: serializeWishlist(list) });
+    return res.json({
+      success: true,
+      message: "Removed from wishlist",
+      wishlist: await serializeWishlist(list),
+    });
   } catch (err) {
     console.error("DELETE /wishlist/items error:", err);
     return res.status(500).json({ success: false, message: "Failed to remove from wishlist" });

@@ -1603,6 +1603,23 @@ export default function ProductsPage() {
               : color
           ),
         },
+        variants: (prev.variants || []).map((variant) => {
+          const variantColor = String(
+            variant?.color?.name || variant?.color?.value || ""
+          ).trim().toLowerCase();
+          const targetColor = String(
+            prev.options.colors?.[index]?.name || ""
+          ).trim().toLowerCase();
+          return variantColor && variantColor === targetColor
+            ? {
+                ...variant,
+                images: [
+                  ...(Array.isArray(variant.images) ? variant.images : []),
+                  ...uploaded,
+                ],
+              }
+            : variant;
+        }),
       }));
 
       showSuccess(`${uploaded.length} colour image${uploaded.length !== 1 ? "s" : ""} uploaded`);
@@ -1611,6 +1628,12 @@ export default function ProductsPage() {
     } finally {
       setUploadingGallery(false);
     }
+  };
+
+  const handleColorDrop = (colorIndex, event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    uploadColorImages(colorIndex, event.dataTransfer?.files);
   };
 
   const removeColorImage = (colorIndex, imageIndex) => {
@@ -1629,6 +1652,22 @@ export default function ProductsPage() {
             : color
         ),
       },
+      variants: (prev.variants || []).map((variant) => {
+        const variantColor = String(
+          variant?.color?.name || variant?.color?.value || ""
+        ).trim().toLowerCase();
+        const targetColor = String(
+          prev.options.colors?.[colorIndex]?.name || ""
+        ).trim().toLowerCase();
+        if (variantColor !== targetColor) return variant;
+        return {
+          ...variant,
+          images: (variant.images || []).filter((image) => {
+            const targetImage = prev.options.colors?.[colorIndex]?.images?.[imageIndex];
+            return !targetImage || (image?.url || image) !== (targetImage?.url || targetImage);
+          }),
+        };
+      }),
     }));
   };
 
@@ -1653,6 +1692,8 @@ export default function ProductsPage() {
           sizeName: "",
           minMeters: "",
           maxMeters: "",
+          minQuantity: "",
+          maxQuantity: "",
           standardCharge: "",
           expressCharge: "",
         },
@@ -2372,7 +2413,12 @@ export default function ProductsPage() {
 
       shippingRules:
         (form.shippingRules || []).map((rule) => ({
-          type: rule.type === "meter" ? "meter" : "size",
+          type:
+            rule.type === "meter"
+              ? "meter"
+              : rule.type === "quantity"
+                ? "quantity"
+                : "size",
           label: rule.label?.trim() || "",
           sizeName: rule.sizeName?.trim() || "",
           minMeters:
@@ -2383,6 +2429,14 @@ export default function ProductsPage() {
             rule.maxMeters === "" || rule.maxMeters == null
               ? null
               : Number(rule.maxMeters),
+          minQuantity:
+            rule.minQuantity === "" || rule.minQuantity == null
+              ? null
+              : Number(rule.minQuantity),
+          maxQuantity:
+            rule.maxQuantity === "" || rule.maxQuantity == null
+              ? null
+              : Number(rule.maxQuantity),
           standardCharge: Number(rule.standardCharge || 0),
           expressCharge: Number(rule.expressCharge || 0),
         })),
@@ -2488,7 +2542,9 @@ export default function ProductsPage() {
           ),
 
         sizes:
-          form.options.sizes.map(
+          form.sellingMode === "meter"
+            ? []
+            : form.options.sizes.map(
             (size) => ({
               ...size,
               _uiId:
@@ -3979,7 +4035,7 @@ export default function ProductsPage() {
                 <div className="form-grid">
 
                   <Field
-                    label="Regular Price"
+                    label={form.sellingMode === "meter" ? "Price per Meter (₹)" : "Regular Price (₹)"}
                     required
                   >
                     <TextInput
@@ -4001,11 +4057,11 @@ export default function ProductsPage() {
                             .value
                         )
                       }
-                      placeholder="1800"
+                      placeholder={form.sellingMode === "meter" ? "Example: 450 per meter" : "1800"}
                     />
                   </Field>
 
-                  <Field label="Sale Price">
+                  <Field label={form.sellingMode === "meter" ? "Sale Price per Meter (₹)" : "Sale Price"}>
                     <TextInput
                       type="number"
                       min="0"
@@ -4044,23 +4100,55 @@ export default function ProductsPage() {
                 }
               >
                 <div className="form-grid">
-                  <Field label="Selling Mode">
-                    <SelectInput
-                      value={form.sellingMode}
-                      onChange={(event) =>
-                        updateForm(
-                          "sellingMode",
-                          event.target.value
-                        )
-                      }
-                    >
-                      <option value="piece">
-                        Ready-made Bag / Piece
-                      </option>
-                      <option value="meter">
-                        Raw Fabric / Meter
-                      </option>
-                    </SelectInput>
+                  <Field label="Choose Product Type">
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+                      {[
+                        {
+                          value: "meter",
+                          title: "Raw Fabric",
+                          text: "Sell by meter with minimum, maximum, increment and meter shipping slabs.",
+                        },
+                        {
+                          value: "piece",
+                          title: "Ready-made / Single",
+                          text: "Sell bags or individual units with size, colour, stock and quantity shipping slabs.",
+                        },
+                      ].map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() =>
+                            setForm((prev) => ({
+                              ...prev,
+                              sellingMode: option.value,
+                              ...(option.value === "meter"
+                                ? {
+                                    options: {
+                                      ...prev.options,
+                                      sizes: [],
+                                    },
+                                    variants: [],
+                                    variantsEnabled: false,
+                                  }
+                                : {}),
+                            }))
+                          }
+                          style={{
+                            textAlign: "left",
+                            padding: "16px",
+                            borderRadius: 12,
+                            border: form.sellingMode === option.value
+                              ? "2px solid #8A5D38"
+                              : "1px solid #ddd",
+                            background: form.sellingMode === option.value ? "#FBF7F1" : "#fff",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <strong style={{ display: "block", marginBottom: 6 }}>{option.title}</strong>
+                          <span style={{ fontSize: 12, lineHeight: 1.5, color: "#666" }}>{option.text}</span>
+                        </button>
+                      ))}
+                    </div>
                   </Field>
 
                   <Field label="Bulk Order Note">
@@ -4183,99 +4271,120 @@ export default function ProductsPage() {
                     </div>
                   </div>
 
-                  {(form.shippingRules || []).map((rule, index) => (
-                    <div
-                      key={rule._uiId || index}
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr 1fr 1fr 34px",
-                        gap: 8,
-                        marginBottom: 8,
-                      }}
-                    >
-                      <SelectInput
-                        value={rule.type || (form.sellingMode === "meter" ? "meter" : "size")}
-                        onChange={(event) =>
-                          updateShippingRule(index, "type", event.target.value)
-                        }
+                  {(form.shippingRules || []).map((rule, index) => {
+                    const ruleType = rule.type || (form.sellingMode === "meter" ? "meter" : "quantity");
+                    const isMeterRule = ruleType === "meter";
+                    const isQuantityRule = ruleType === "quantity";
+                    return (
+                      <div
+                        key={rule._uiId || index}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1.1fr 1fr 1fr 1fr 34px",
+                          gap: 8,
+                          marginBottom: 10,
+                          alignItems: "end",
+                        }}
                       >
-                        <option value="size">Size</option>
-                        <option value="meter">Meter</option>
-                      </SelectInput>
+                        <SelectInput
+                          value={ruleType}
+                          onChange={(event) =>
+                            updateShippingRule(index, "type", event.target.value)
+                          }
+                        >
+                          {form.sellingMode === "meter" ? (
+                            <option value="meter">Meter range</option>
+                          ) : (
+                            <>
+                              <option value="quantity">Piece range</option>
+                              <option value="size">Specific size</option>
+                            </>
+                          )}
+                        </SelectInput>
 
-                      <TextInput
-                        value={rule.type === "meter" ? rule.minMeters : rule.sizeName}
-                        onChange={(event) =>
-                          updateShippingRule(
-                            index,
-                            rule.type === "meter" ? "minMeters" : "sizeName",
-                            event.target.value
-                          )
-                        }
-                        placeholder={
-                          rule.type === "meter"
-                            ? "Min meters"
-                            : "Size name"
-                        }
-                      />
+                        {isMeterRule ? (
+                          <>
+                            <TextInput
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={rule.minMeters ?? ""}
+                              onChange={(event) => updateShippingRule(index, "minMeters", event.target.value)}
+                              placeholder="Min metres"
+                            />
+                            <TextInput
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={rule.maxMeters ?? ""}
+                              onChange={(event) => updateShippingRule(index, "maxMeters", event.target.value)}
+                              placeholder="Max metres"
+                            />
+                          </>
+                        ) : isQuantityRule ? (
+                          <>
+                            <TextInput
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={rule.minQuantity ?? ""}
+                              onChange={(event) => updateShippingRule(index, "minQuantity", event.target.value)}
+                              placeholder="Min pieces"
+                            />
+                            <TextInput
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={rule.maxQuantity ?? ""}
+                              onChange={(event) => updateShippingRule(index, "maxQuantity", event.target.value)}
+                              placeholder="Max pieces"
+                            />
+                          </>
+                        ) : (
+                          <>
+                            <TextInput
+                              value={rule.sizeName ?? ""}
+                              onChange={(event) => updateShippingRule(index, "sizeName", event.target.value)}
+                              placeholder="Size name"
+                            />
+                            <TextInput
+                              value={rule.label ?? ""}
+                              onChange={(event) => updateShippingRule(index, "label", event.target.value)}
+                              placeholder="Label/details"
+                            />
+                          </>
+                        )}
 
-                      <TextInput
-                        value={rule.type === "meter" ? rule.maxMeters : rule.label}
-                        onChange={(event) =>
-                          updateShippingRule(
-                            index,
-                            rule.type === "meter" ? "maxMeters" : "label",
-                            event.target.value
-                          )
-                        }
-                        placeholder={
-                          rule.type === "meter"
-                            ? "Max meters"
-                            : "Label/details"
-                        }
-                      />
-
-                      <TextInput
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={rule.standardCharge ?? ""}
-                        onChange={(event) =>
-                          updateShippingRule(
-                            index,
-                            "standardCharge",
-                            event.target.value
-                          )
-                        }
-                        placeholder="Standard ₹"
-                      />
-
-                      <button
-                        type="button"
-                        className="danger-icon-button"
-                        onClick={() => removeShippingRule(index)}
-                      >
-                        <X size={13} />
-                      </button>
-
-                      <div style={{ gridColumn: "1 / -1" }}>
                         <TextInput
                           type="number"
                           min="0"
                           step="0.01"
-                          value={rule.expressCharge ?? ""}
-                          onChange={(event) =>
-                            updateShippingRule(
-                              index,
-                              "expressCharge",
-                              event.target.value
-                            )
-                          }
-                          placeholder="Express shipping ₹"
+                          value={rule.standardCharge ?? ""}
+                          onChange={(event) => updateShippingRule(index, "standardCharge", event.target.value)}
+                          placeholder="Standard ₹"
                         />
+
+                        <button
+                          type="button"
+                          className="danger-icon-button"
+                          onClick={() => removeShippingRule(index)}
+                        >
+                          <X size={13} />
+                        </button>
+
+                        <div style={{ gridColumn: "2 / -1" }}>
+                          <TextInput
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={rule.expressCharge ?? ""}
+                            onChange={(event) => updateShippingRule(index, "expressCharge", event.target.value)}
+                            placeholder="Express shipping ₹"
+                          />
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   {!form.shippingRules?.length && (
                     <div className="option-empty">
@@ -4479,6 +4588,23 @@ export default function ProductsPage() {
                                 <X size={13} />
                               </button>
 
+                              <div
+                                onDragOver={(event) => event.preventDefault()}
+                                onDrop={(event) => handleColorDrop(index, event)}
+                                style={{
+                                  gridColumn: "1 / -1",
+                                  border: "1px dashed #C9B9A8",
+                                  borderRadius: 8,
+                                  padding: "8px 10px",
+                                  color: "#777",
+                                  fontSize: 12,
+                                  textAlign: "center",
+                                  background: "#FCFAF7",
+                                }}
+                              >
+                                Drag & drop colour images here, or use + Images
+                              </div>
+
                               {Array.isArray(color.images) &&
                                 color.images.length > 0 && (
                                   <div
@@ -4547,6 +4673,7 @@ export default function ProductsPage() {
 
                       {/* SIZES */}
 
+                      {form.sellingMode !== "meter" && (
                       <div className="option-card">
 
                         <div className="option-header">
@@ -4720,6 +4847,7 @@ export default function ProductsPage() {
                           </div>
                         )}
                       </div>
+                      )}
 
                     </div>
 

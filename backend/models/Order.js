@@ -289,6 +289,62 @@ const orderItemSchema = new mongoose.Schema(
         default: true,
       },
     },
+
+    /*
+    |--------------------------------------------------------------------------
+    | Shipping & Dimensions Snapshot
+    |--------------------------------------------------------------------------
+    | For admin to know meter, bags quantity, weight, dimensions, etc.
+    */
+
+    shippingDetails: {
+      weight: {
+        type: Number,
+        min: 0,
+        default: null,
+      },
+
+      length: {
+        type: Number,
+        min: 0,
+        default: null,
+      },
+
+      breadth: {
+        type: Number,
+        min: 0,
+        default: null,
+      },
+
+      height: {
+        type: Number,
+        min: 0,
+        default: null,
+      },
+
+      sellingMode: {
+        type: String,
+        enum: ["piece", "meter"],
+        default: "piece",
+      },
+
+      meterDetails: {
+        foldLength: {
+          type: String,
+          default: "",
+        },
+
+        minMeters: {
+          type: Number,
+          default: null,
+        },
+
+        maxMeters: {
+          type: Number,
+          default: null,
+        },
+      },
+    },
   },
   {
     _id: true,

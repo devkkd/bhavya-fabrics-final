@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { useRouter } from "next/navigation";
+import { notifyCustomerAuthChanged } from "@/utils/storefrontSync";
 
 import {
 
@@ -280,6 +281,7 @@ function AccountSidebar({ router, active = "orders" }) {
 
             } finally {
 
+              notifyCustomerAuthChanged();
               router.replace("/");
 
               router.refresh();
@@ -376,6 +378,7 @@ function AccountSidebar({ router, active = "orders" }) {
 
             } finally {
 
+              notifyCustomerAuthChanged();
               router.replace("/");
 
               router.refresh();

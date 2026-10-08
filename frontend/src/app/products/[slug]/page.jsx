@@ -2003,11 +2003,8 @@ function normalizeBackendProduct(item) {
       new Map(
         rawColors.map(
           (color, index) => {
-            const name =
-              getOptionName(
-                color
-              ) ||
-              `Color ${index + 1}`;
+            const name = getOptionName(color);
+            if (!name) return null;
 
             const value =
               getOptionValue(
@@ -2039,7 +2036,7 @@ function normalizeBackendProduct(item) {
               },
             ];
           }
-        )
+        ).filter(Boolean)
       ).values()
     );
 
@@ -2157,11 +2154,8 @@ function normalizeBackendProduct(item) {
       new Map(
         rawSizes.map(
           (size, index) => {
-            const name =
-              getOptionName(
-                size
-              ) ||
-              `Size ${index + 1}`;
+            const name = getOptionName(size);
+            if (!name) return null;
 
             const value =
               getOptionValue(
@@ -2200,7 +2194,7 @@ function normalizeBackendProduct(item) {
               },
             ];
           }
-        )
+        ).filter(Boolean)
       ).values()
     );
 
@@ -2592,6 +2586,10 @@ function SyncedRelatedProductCard({
 
     const requiresSize =
       availableSizes.length > 0;
+
+    if (!requiresColor && !requiresSize) {
+      return null;
+    }
 
     if (
       requiresColor &&
@@ -3347,7 +3345,11 @@ export default function ProductDetailPage() {
   // ---------- RESET ON PRODUCT CHANGE ----------
 
   useEffect(() => {
-    setQuantity(1);
+    setQuantity(
+      product?.sellingMode === "meter"
+        ? Math.max(1, Number(product?.meterConfig?.minMeters ?? 1))
+        : 1
+    );
     setActiveImage(0);
     setActiveColor(0);
     setSelectedSize("");
@@ -3409,11 +3411,13 @@ export default function ProductDetailPage() {
               : [];
 
           const normalized = relatedArray
-            .slice(0, 4)
-            .map((item) =>
-              normalizeBackendProduct(item)
+            .map((item) => normalizeBackendProduct(item))
+            .filter(Boolean)
+            .filter((item) =>
+              String(item.id || "") !== String(product.id || "") &&
+              String(item.slug || "").toLowerCase() !== String(product.slug || "").toLowerCase()
             )
-            .filter(Boolean);
+            .slice(0, 4);
 
           setRelatedProducts(normalized);
         } else {
@@ -3472,14 +3476,15 @@ export default function ProductDetailPage() {
       return product.colorOptions;
     }
 
-    return (
-      product.colors || []
-    ).map((color, index) => ({
-      index,
-      name: `Color ${index + 1}`,
-      value: color,
-      hex: color,
-    }));
+    return (product.colors || [])
+      .filter(Boolean)
+      .map((color, index) => ({
+        index,
+        name: String(color).trim(),
+        value: String(color).trim(),
+        hex: color,
+      }))
+      .filter((color) => color.name);
   }, [product]);
 
   // ---------- SELECTED COLOUR ----------
@@ -3508,6 +3513,7 @@ export default function ProductDetailPage() {
 
   const availableSizes = useMemo(() => {
     if (!product) return [];
+    if (product.sellingMode === "meter") return [];
 
     const configuredSizes =
       Array.isArray(product.sizeOptions)
@@ -3614,6 +3620,8 @@ export default function ProductDetailPage() {
 
     const requiresColor = colorOptions.length > 0;
     const requiresSize = availableSizes.length > 0;
+
+    if (!requiresColor && !requiresSize) return null;
 
     if (requiresColor && !selectedColorValue) return null;
     if (requiresSize && !selectedSize) return null;
@@ -3845,6 +3853,18 @@ export default function ProductDetailPage() {
     };
   }, [product, availableSizes, selectedSize, selectedVariant]);
 
+  const isMeterProduct = product?.sellingMode === "meter";
+  const meterMin = isMeterProduct
+    ? Math.max(1, Number(product?.meterConfig?.minMeters ?? 1))
+    : 1;
+  const meterMax = isMeterProduct
+    ? Math.max(meterMin, Number(product?.meterConfig?.maxMeters ?? 100))
+    : 100;
+  const meterStep = isMeterProduct
+    ? Math.max(0.01, Number(product?.meterConfig?.incrementMeters ?? 1))
+    : 1;
+
+  const unitPriceLabel = isMeterProduct ? "per meter" : "per piece";
   // ---------- ACTIVE IMAGE LIST ----------
 
   const activeImages = useMemo(() => {
@@ -3877,6 +3897,7 @@ export default function ProductDetailPage() {
   }, [
     product,
     selectedVariant,
+    selectedColor,
   ]);
 
   // Keep active image valid when variant changes
@@ -4009,88 +4030,69 @@ export default function ProductDetailPage() {
 
   const decreaseQuantity =
     useCallback(async () => {
+      const min = isMeterProduct ? meterMin : 1;
+      const step = isMeterProduct ? meterStep : 1;
+
       if (mainCartItem?._id) {
-        const current =
-          Number(
-            mainCartItem.quantity || 1
-          );
+        const current = Number(mainCartItem.quantity || min);
+        const next = Math.max(min, Math.round((current - step) * 100) / 100);
 
-        if (current > 1) {
-          await updateQuantity(
-            mainCartItem._id,
-            current - 1
-          );
+        if (next < current) {
+          await updateQuantity(mainCartItem._id, next);
         }
-
         return;
       }
 
       setQuantity((current) =>
-        Math.max(
-          1,
-          current - 1
+        Math.max(min, Math.round((current - step) * 100) / 100)
+      );
+    }, [
+      mainCartItem,
+      updateQuantity,
+      isMeterProduct,
+      meterMin,
+      meterStep,
+    ]);
+
+  const increaseQuantity =
+    useCallback(async () => {
+      const step = isMeterProduct ? meterStep : 1;
+      const max = isMeterProduct ? meterMax : 100;
+
+      if (isMeterProduct && quantity >= max) {
+        router.push(`/contact?bulk=1&product=${encodeURIComponent(product?.name || "")}`);
+        return;
+      }
+
+      if (mainCartItem?._id) {
+        const current = Number(mainCartItem.quantity || (isMeterProduct ? meterMin : 1));
+        const next = Math.min(
+          max,
+          Math.round((current + step) * 100) / 100
+        );
+
+        if (next > current) {
+          await updateQuantity(mainCartItem._id, next);
+        }
+        return;
+      }
+
+      setQuantity((current) =>
+        Math.min(
+          max,
+          Math.round((current + step) * 100) / 100
         )
       );
     }, [
       mainCartItem,
       updateQuantity,
-      product,
-    ]);
-
-  const increaseQuantity =
-    useCallback(async () => {
-      if (mainCartItem?._id) {
-        const current =
-          Number(
-            mainCartItem.quantity || 1
-          );
-
-        const next =
-          selectedVariant &&
-          availableStock !== null
-            ? Math.min(
-                current + 1,
-                availableStock
-              )
-            : Math.min(
-                current + 1,
-                100
-              );
-
-        if (next > current) {
-          await updateQuantity(
-            mainCartItem._id,
-            next
-          );
-        }
-
-        return;
-      }
-
-      setQuantity((current) => {
-        const next =
-          current + 1;
-
-        if (
-          selectedVariant &&
-          availableStock !== null
-        ) {
-          return Math.min(
-            next,
-            availableStock
-          );
-        }
-
-        return Math.min(
-          next,
-          100
-        );
-      });
-    }, [
-      mainCartItem,
-      updateQuantity,
-      selectedVariant,
-      availableStock,
+      isMeterProduct,
+      meterMin,
+      meterMax,
+      meterStep,
+      quantity,
+      router,
+      product?.name,
     ]);
 
   // ---------- ADD TO CART ----------
@@ -4109,10 +4111,15 @@ export default function ProductDetailPage() {
         /*
          * Variant validation
          */
-        if (
-          product.variantsEnabled ||
-          colorOptions.length > 0 ||
-          availableSizes.length > 0
+        // Ready-made products use colour/size variants.
+      // Raw fabric is meter-based and must never require size/variant validation.
+      if (
+          product.sellingMode !== "meter" &&
+          (
+            product.variantsEnabled ||
+            colorOptions.length > 0 ||
+            availableSizes.length > 0
+          )
         ) {
           const requiresColor =
             colorOptions.length > 0;
@@ -4273,11 +4280,17 @@ export default function ProductDetailPage() {
         return;
       }
 
+      // Raw Fabric is meter-based and must NEVER run
+      // the Ready-made colour/size variant validation.
+      // Buy Now must use the same meter quantity as Add to Cart.
       if (
+        product.sellingMode !== "meter" &&
+        (
           product.variantsEnabled ||
           colorOptions.length > 0 ||
           availableSizes.length > 0
-        ) {
+        )
+      ) {
         const requiresColor =
           colorOptions.length > 0;
 
@@ -4530,39 +4543,21 @@ export default function ProductDetailPage() {
     ] || PLACEHOLDER_IMAGE;
 
   const selectedPrice = displayPrice;
+  const calculatedProductTotal = Number(selectedPrice || 0) * Number(quantity || 0);
 
   const selectedSku =
     selectedVariant?.sku ||
     product.sku ||
     "—";
 
-  // MOQ is no longer used by the new product UI.
-  // Quantity always starts from 1; selling mode/size comes from backend.
-  const minQty = 1;
+  const minQty = isMeterProduct ? meterMin : 1;
+  const maxQty = isMeterProduct ? meterMax : 100;
+  const qtyStep = isMeterProduct ? meterStep : 1;
 
   const changeQty = (delta) => {
     setQuantity((current) => {
-      const next = current + delta;
-
-      if (next < minQty) {
-        return minQty;
-      }
-
-      if (
-        selectedVariant &&
-        Number.isFinite(availableStock) &&
-        availableStock > 0
-      ) {
-        return Math.min(
-          next,
-          availableStock
-        );
-      }
-
-      return Math.min(
-        next,
-        100
-      );
+      const next = Math.round((current + delta) * 100) / 100;
+      return Math.min(maxQty, Math.max(minQty, next));
     });
   };
 
@@ -4805,7 +4800,10 @@ export default function ProductDetailPage() {
             <div className="pd-price-row">
 
               <span className="pd-price">
-                ₹{selectedPrice}
+                ₹{Number(selectedPrice || 0).toLocaleString("en-IN")}
+              </span>
+              <span style={{ fontSize: 12, color: "#777", marginLeft: 6 }}>
+                {unitPriceLabel}
               </span>
 
               {hasSalePrice && (
@@ -4994,7 +4992,7 @@ export default function ProductDetailPage() {
 
             {/* SIZE */}
 
-            {availableSizes.length > 0 && (
+            {!isMeterProduct && availableSizes.length > 0 && (
               <div className="pd-colors">
 
                 <span className="pd-colors-title">
@@ -5165,7 +5163,7 @@ export default function ProductDetailPage() {
             <div className="pd-quantity-section">
 
               <span className="pd-quantity-label">
-                Quantity (Metres)
+                {isMeterProduct ? "Quantity (Metres)" : "Quantity (Pieces)"}
               </span>
 
               <div className="pd-quantity-row">
@@ -5192,11 +5190,10 @@ export default function ProductDetailPage() {
                     onClick={increaseQuantity}
                     disabled={
                       Boolean(
-                        selectedVariant &&
-                        availableStock !==
-                          null &&
-                        quantity >=
-                          availableStock
+                        (selectedVariant &&
+                          availableStock !== null &&
+                          quantity >= availableStock) ||
+                        quantity >= maxQty
                       )
                     }
                     aria-label="Increase quantity"
@@ -5228,11 +5225,37 @@ export default function ProductDetailPage() {
                 />
 
                 <span className="pd-min-order">
-                  {product.bulkOrderNote ||
-                    "Contact us for bulk orders."}
+                  {isMeterProduct
+                    ? `Min ${meterMin}m • Max ${meterMax}m • +${meterStep}m`
+                    : "1 piece / unit"}
                 </span>
 
               </div>
+
+              <div style={{ marginTop: 10, fontSize: 13, color: "#555" }}>
+                {isMeterProduct
+                  ? `${quantity}m × ₹${Number(selectedPrice || 0).toLocaleString("en-IN")}/m = ₹${calculatedProductTotal.toLocaleString("en-IN")}`
+                  : `${quantity} × ₹${Number(selectedPrice || 0).toLocaleString("en-IN")} = ₹${calculatedProductTotal.toLocaleString("en-IN")}`}
+              </div>
+
+              {isMeterProduct && quantity >= meterMax && (
+                <button
+                  type="button"
+                  onClick={() => router.push(`/contact?bulk=1&product=${encodeURIComponent(product.name || "")}`)}
+                  style={{
+                    marginTop: 8,
+                    border: "none",
+                    background: "transparent",
+                    padding: 0,
+                    color: "#8A5D38",
+                    textDecoration: "underline",
+                    cursor: "pointer",
+                    fontSize: 12,
+                  }}
+                >
+                  Need more than {meterMax}m? Contact our team for a bulk order.
+                </button>
+              )}
 
               {cartMsg && (
                 <div

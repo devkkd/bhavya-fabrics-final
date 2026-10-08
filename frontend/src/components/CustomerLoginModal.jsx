@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import { notifyCustomerAuthChanged } from "@/utils/storefrontSync";
 import {
   X,
   Eye,
@@ -130,7 +131,10 @@ export default function CustomerLoginModal({
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
-      if (payload?.success && payload?.user) onSuccess?.(payload.user);
+      if (payload?.success && payload?.user) {
+        notifyCustomerAuthChanged();
+        onSuccess?.(payload.user);
+      }
     } catch (err) {
       setError(err.message || "Login failed.");
     } finally {
@@ -168,7 +172,10 @@ export default function CustomerLoginModal({
         method: "POST",
         body: JSON.stringify({ email, otp }),
       });
-      if (payload?.success && payload?.user) onSuccess?.(payload.user);
+      if (payload?.success && payload?.user) {
+        notifyCustomerAuthChanged();
+        onSuccess?.(payload.user);
+      }
     } catch (err) {
       setError(err.message || "Invalid OTP.");
     } finally {
@@ -209,7 +216,10 @@ export default function CustomerLoginModal({
         method: "POST",
         body: JSON.stringify({ email, otp }),
       });
-      if (payload?.success && payload?.user) onSuccess?.(payload.user);
+      if (payload?.success && payload?.user) {
+        notifyCustomerAuthChanged();
+        onSuccess?.(payload.user);
+      }
     } catch (err) {
       setError(err.message || "Invalid OTP.");
     } finally {

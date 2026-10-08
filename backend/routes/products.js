@@ -194,6 +194,43 @@ const normalizeProductPayload = (body = {}) => {
       .filter((spec) => spec.name && spec.value);
   }
 
+  if (Array.isArray(body.shippingRules)) {
+    payload.shippingRules = body.shippingRules
+      .map((rule) => ({
+        ...rule,
+        type: ["meter", "size", "quantity"].includes(String(rule?.type || ""))
+          ? String(rule.type)
+          : "size",
+        label: String(rule?.label ?? "").trim(),
+        sizeName: String(rule?.sizeName ?? "").trim(),
+        minMeters:
+          rule?.minMeters === "" || rule?.minMeters == null
+            ? null
+            : Number(rule.minMeters),
+        maxMeters:
+          rule?.maxMeters === "" || rule?.maxMeters == null
+            ? null
+            : Number(rule.maxMeters),
+        minQuantity:
+          rule?.minQuantity === "" || rule?.minQuantity == null
+            ? null
+            : Number(rule.minQuantity),
+        maxQuantity:
+          rule?.maxQuantity === "" || rule?.maxQuantity == null
+            ? null
+            : Number(rule.maxQuantity),
+        standardCharge:
+          rule?.standardCharge === "" || rule?.standardCharge == null
+            ? 0
+            : Number(rule.standardCharge),
+        expressCharge:
+          rule?.expressCharge === "" || rule?.expressCharge == null
+            ? 0
+            : Number(rule.expressCharge),
+      }))
+      .filter((rule) => Number.isFinite(rule.standardCharge) && Number.isFinite(rule.expressCharge));
+  }
+
   if (body.options && typeof body.options === "object") {
     payload.options = {
       ...body.options,
@@ -366,6 +403,7 @@ router.get(
         sale,
         featured,
         search,
+        sellingMode,
         page = 1,
         limit = 12
       } = req.query;
@@ -373,6 +411,10 @@ router.get(
       const filter = {
         status: "published"
       };
+
+      if (sellingMode === "meter" || sellingMode === "piece") {
+        filter.sellingMode = sellingMode;
+      }
 
       /*
       |--------------------------------------------------------------------------

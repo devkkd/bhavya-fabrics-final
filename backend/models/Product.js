@@ -432,7 +432,7 @@ const productSchema =
         type: [{
           type: {
             type: String,
-            enum: ["size", "meter"],
+            enum: ["size", "meter", "quantity"],
             required: true,
           },
           label: {
@@ -451,6 +451,16 @@ const productSchema =
             default: null,
           },
           maxMeters: {
+            type: Number,
+            min: 0,
+            default: null,
+          },
+          minQuantity: {
+            type: Number,
+            min: 0,
+            default: null,
+          },
+          maxQuantity: {
             type: Number,
             min: 0,
             default: null,

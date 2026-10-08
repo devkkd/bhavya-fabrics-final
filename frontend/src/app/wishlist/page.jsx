@@ -289,6 +289,7 @@ function normalizeProduct(item, fallbackItem = {}) {
     variantsEnabled:
       Boolean(source?.variantsEnabled) || variants.length > 0,
     category,
+    status: source?.status || fallbackItem?.productStatus || "unavailable",
   };
 }
 
@@ -385,7 +386,7 @@ function getDiscountPercent(regularPrice, salePrice) {
   return Math.round(((regular - sale) / regular) * 100);
 }
 
-function WishlistProductCard({ wishlistItem, product }) {
+function WishlistProductCard({ wishlistItem, product, onRemoveSaved }) {
   const {
     addToCart,
     items: cartItems = [],
@@ -445,12 +446,20 @@ function WishlistProductCard({ wishlistItem, product }) {
   ]);
 
   const selectedVariant = useMemo(
-    () =>
-      findVariant(
+    () => {
+      if (
+        !product?.colorOptions?.length &&
+        !product?.sizeOptions?.length
+      ) {
+        return null;
+      }
+
+      return findVariant(
         product,
         selectedColorOption || selectedColor,
         selectedSize
-      ),
+      );
+    },
     [product, selectedColorOption, selectedColor, selectedSize]
   );
 
@@ -813,6 +822,15 @@ function WishlistProductCard({ wishlistItem, product }) {
         <span className="wishlist-price-pill">
           {priceText(selectedPrice)}
         </span>
+        <button
+          type="button"
+          className="wishlist-save-heart"
+          onClick={onRemoveSaved}
+          aria-label={`Remove ${product.title} from saved products`}
+          title="Remove from saved products"
+        >
+          <Heart size={19} fill="currentColor" />
+        </button>
       </div>
 
       <div className="wishlist-card-body">
@@ -1138,6 +1156,14 @@ export default function WishlistPage() {
             wishlistItem
           );
 
+          if (wishlistItem?.productStatus !== "published") {
+            nextProducts[productId || slug] = {
+              ...fallback,
+              status: wishlistItem?.productStatus || "unavailable",
+            };
+            return;
+          }
+
           try {
             const endpointKey =
               slug || productId;
@@ -1152,7 +1178,10 @@ export default function WishlistPage() {
             );
 
             if (!response.ok) {
-              nextProducts[productId || slug] = fallback;
+              nextProducts[productId || slug] =
+                response.status === 404
+                  ? { ...fallback, status: "unavailable" }
+                  : fallback;
               return;
             }
 
@@ -1163,11 +1192,22 @@ export default function WishlistPage() {
               payload?.data?.product ||
               payload;
 
+            const liveProductId = String(
+              rawProduct?._id || rawProduct?.id || ""
+            );
             nextProducts[productId || slug] =
-              normalizeProduct(rawProduct, wishlistItem);
+              liveProductId === productId
+                ? normalizeProduct(rawProduct, wishlistItem)
+                : {
+                    ...fallback,
+                    status: "unavailable",
+                  };
           } catch (error) {
             if (error?.name === "AbortError") return;
-            nextProducts[productId || slug] = fallback;
+            nextProducts[productId || slug] = {
+              ...fallback,
+              status: "unavailable",
+            };
           }
         })
       );
@@ -1188,10 +1228,7 @@ export default function WishlistPage() {
 
   const totalPages = Math.max(
     1,
-    Math.ceil(
-      Number(itemCount || wishlistItems.length || 0) /
-        PAGE_SIZE
-    )
+    Math.ceil(wishlistItems.length / PAGE_SIZE)
   );
 
   const safePage = Math.min(currentPage, totalPages);
@@ -1414,6 +1451,60 @@ export default function WishlistPage() {
         .wishlist-price-pill {
           right: 9px;
           background: ${COLORS.teal};
+          color: #fff;
+        }
+
+        .wishlist-save-heart {
+          position: absolute;
+          z-index: 4;
+          top: 44px;
+          right: 9px;
+          width: 36px;
+          height: 36px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid rgba(184, 109, 101, .35);
+          border-radius: 50%;
+          background: #fff;
+          color: #B86D65;
+          cursor: pointer;
+          box-shadow: 0 3px 10px rgba(0, 0, 0, .12);
+          transition: transform .18s ease, background .18s ease, color .18s ease;
+        }
+
+        .wishlist-save-heart:hover {
+          transform: scale(1.08);
+          background: #B86D65;
+          color: #fff;
+        }
+
+        .wishlist-save-heart:focus-visible,
+        .wishlist-unavailable-remove:focus-visible {
+          outline: 2px solid ${COLORS.teal};
+          outline-offset: 3px;
+        }
+
+        .wishlist-unavailable-remove {
+          min-height: 36px;
+          margin-top: 12px;
+          padding: 0 13px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          border: 1px solid #B86D65;
+          border-radius: 999px;
+          background: #fff;
+          color: #A64D4D;
+          cursor: pointer;
+          font-family: "Poppins", Arial, sans-serif;
+          font-size: 10px;
+          font-weight: 700;
+        }
+
+        .wishlist-unavailable-remove:hover {
+          background: #A64D4D;
           color: #fff;
         }
 
@@ -1821,8 +1912,16 @@ export default function WishlistPage() {
           display: flex;
           align-items: center;
           justify-content: center;
+          flex-wrap: wrap;
           gap: 8px;
           margin-top: 30px;
+        }
+
+        .wishlist-page-status {
+          margin-left: 4px;
+          color: ${COLORS.navGray};
+          font-family: "Poppins", Arial, sans-serif;
+          font-size: 10px;
         }
 
         .wishlist-page-button {
@@ -2015,33 +2114,58 @@ export default function WishlistPage() {
                 const product =
                   getProductForWishlistItem(wishlistItem);
 
+                const isAvailable = product?.status === "published";
+
                 if (!product) return null;
 
                 const key =
                   wishlistItem?._id ||
                   `${product.id}-${product.slug}`;
+                const productId = String(
+                  wishlistItem?.productId?._id ||
+                    wishlistItem?.productId?.id ||
+                    wishlistItem?.productId ||
+                    product.id
+                );
+                const removeSavedButton = (
+                  <button
+                    type="button"
+                    className="wishlist-unavailable-remove"
+                    onClick={() => toggleSave(productId)}
+                    aria-label={`Remove ${product.title || "product"} from saved products`}
+                  >
+                    <Heart size={15} fill="currentColor" />
+                    <span>Remove from Saved</span>
+                  </button>
+                );
 
                 return (
                   <div key={key}>
-                    <WishlistProductCard
-                      wishlistItem={wishlistItem}
-                      product={product}
-                    />
-
-                    <div
-                      style={{
-                        display: "none",
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() =>
-                          toggleSave(product.id)
-                        }
+                    {!isAvailable ? (
+                      <div
+                        style={{
+                          padding: "20px",
+                          background: "#fff5f5",
+                          border: "1px solid #ffcccc",
+                          borderRadius: "8px",
+                          textAlign: "center",
+                        }}
                       >
-                        Remove wishlist
-                      </button>
-                    </div>
+                        <div style={{ color: "#ff6b6b", fontWeight: "700" }}>
+                          ⚠️ Product Unavailable
+                        </div>
+                        <div style={{ color: "#888", fontSize: "12px", marginTop: "8px" }}>
+                          {product?.title || "This product"} is no longer available
+                        </div>
+                        {removeSavedButton}
+                      </div>
+                    ) : (
+                      <WishlistProductCard
+                        wishlistItem={wishlistItem}
+                        product={product}
+                        onRemoveSaved={() => toggleSave(productId)}
+                      />
+                    )}
                   </div>
                 );
               })}
@@ -2088,6 +2212,9 @@ export default function WishlistPage() {
                 >
                   <ChevronRight size={16} />
                 </button>
+                <span className="wishlist-page-status" aria-live="polite">
+                  Page {safePage} of {totalPages}
+                </span>
               </div>
             )}
           </>

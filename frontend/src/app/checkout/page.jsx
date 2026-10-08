@@ -2,7 +2,7 @@
 
 
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, Suspense } from "react";
 
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -315,6 +315,14 @@ function formatINR(value) {
 
 
 export default function CheckoutPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><p>Loading...</p></div>}>
+      <CheckoutPageContent />
+    </Suspense>
+  );
+}
+
+function CheckoutPageContent() {
 
   const router = useRouter();
 
@@ -458,13 +466,13 @@ const {
 
   const itemsToDisplay =
 
-    Array.isArray(effectiveBuyNowItems) &&
+    (Array.isArray(effectiveBuyNowItems) &&
 
     effectiveBuyNowItems.length > 0
 
       ? effectiveBuyNowItems
 
-      : cartItems;
+      : cartItems).filter(item => !item?.unavailable);
 
 
 
@@ -3693,15 +3701,9 @@ const {
 
 
                         <div className="summary-item-qty">
-
-                          Qty:{" "}
-
-                          {
-
-                            quantity
-
-                          }
-
+                          {item?.sellingMode === "meter"
+                            ? `Quantity: ${quantity}m`
+                            : `Quantity: ${quantity} unit${quantity === 1 ? "" : "s"}`}
                         </div>
 
 

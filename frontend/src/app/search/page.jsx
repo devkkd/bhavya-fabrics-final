@@ -145,7 +145,8 @@ function normalizeProduct(item) {
   const colorOptions = Array.from(
     new Map(
       colorSource.map((color, index) => {
-        const name = getOptionName(color) || `Color ${index + 1}`;
+        const name = getOptionName(color);
+        if (!name) return null;
         const value = getOptionValue(color) || name;
         const hex = getOptionHex(color) || "#D9D1C7";
         return [
@@ -160,7 +161,7 @@ function normalizeProduct(item) {
               : [],
           },
         ];
-      })
+      }).filter(Boolean)
     ).values()
   );
 
@@ -193,7 +194,8 @@ function normalizeProduct(item) {
   const sizeOptions = Array.from(
     new Map(
       rawSizes.map((size, index) => {
-        const name = getOptionName(size) || `Size ${index + 1}`;
+        const name = getOptionName(size);
+        if (!name) return null;
         const value = getOptionValue(size) || name;
         return [
           value.toLowerCase(),
@@ -208,7 +210,7 @@ function normalizeProduct(item) {
             salePrice: size?.salePrice ?? null,
           },
         ];
-      })
+      }).filter(Boolean)
     ).values()
   );
 
@@ -399,6 +401,13 @@ function ProductCard({ product, onLoginRequired }) {
       !product?.variantsEnabled ||
       !Array.isArray(product?.variants) ||
       !product.variants.length
+    ) {
+      return null;
+    }
+
+    if (
+      !product?.colorOptions?.length &&
+      !product?.sizeOptions?.length
     ) {
       return null;
     }

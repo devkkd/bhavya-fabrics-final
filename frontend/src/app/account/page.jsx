@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { notifyCustomerAuthChanged } from "@/utils/storefrontSync";
 
 import CustomerLoginModal from "../../components/CustomerLoginModal";
 
@@ -375,6 +376,7 @@ function AccountPageContent() {
         error
       );
     } finally {
+      notifyCustomerAuthChanged();
       setCustomer(null);
       router.replace("/");
       router.refresh();

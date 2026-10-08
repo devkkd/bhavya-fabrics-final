@@ -110,6 +110,8 @@ const cartItemSchema = new mongoose.Schema(
       sellingMode: { type: String, default: "piece" },
       priceUnit: { type: String, default: "" },
       shippingRules: { type: Array, default: [] },
+      meterConfig: { type: mongoose.Schema.Types.Mixed, default: null },
+      bulkOrderNote: { type: String, default: "Contact us for bulk orders." },
     },
   },
   {

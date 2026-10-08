@@ -606,16 +606,26 @@ function makeSnapshot(product, variant, selectedColor, selectedSize) {
     priceUnit: product?.priceUnit || "",
 
     shippingRules: Array.isArray(product?.shippingRules)
-
       ? product.shippingRules
-
       : [],
-
+    meterConfig: product?.meterConfig || null,
+    bulkOrderNote: product?.bulkOrderNote || "Contact us for bulk orders.",
   };
 
 }
 
-function serializeCart(cart) {
+async function serializeCart(cart) {
+  const productIds = [
+    ...new Set(cart.items.map((item) => String(item.productId))),
+  ];
+  const products = productIds.length
+    ? await Product.find({ _id: { $in: productIds } })
+        .select("_id status")
+        .lean()
+    : [];
+  const productStatuses = new Map(
+    products.map((product) => [String(product._id), product.status])
+  );
 
   return {
 
@@ -626,6 +636,11 @@ function serializeCart(cart) {
       _id: item._id,
 
       productId: item.productId,
+
+      productStatus:
+        productStatuses.get(String(item.productId)) || "unavailable",
+      productAvailable:
+        productStatuses.get(String(item.productId)) === "published",
 
       variantId: item.variantId || null,
 
@@ -737,7 +752,7 @@ router.get("/", customerAuth, async (req, res) => {
 
       success: true,
 
-      cart: serializeCart(cart),
+      cart: await serializeCart(cart),
 
     });
 
@@ -794,16 +809,43 @@ router.post("/items", customerAuth, async (req, res) => {
     const productId = String(req.body?.productId || "").trim();
 
     const requestedQuantity = Number(req.body?.quantity ?? 1);
+    if (!Number.isFinite(requestedQuantity) || requestedQuantity < 1) {
+      return res.status(400).json({
+        success: false,
+        message: "Quantity must be at least 1.",
+      });
+    }
+
+    if (!productId || !mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid productId is required",
+      });
+    }
+
+    const product = await Product.findById(productId).lean();
+
+    if (!product || product.status !== "published") {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found or unavailable",
+      });
+    }
+
+    const isMeterProduct =
+      product.sellingMode === "meter" ||
+      product.meterConfig?.enabled === true;
+
+    const configuredMax = isMeterProduct
+      ? Number(product.meterConfig?.maxMeters ?? 100)
+      : 100;
 
     const quantity = Math.min(
-
-      100,
-
-      Math.max(1, Math.floor(requestedQuantity))
-
+      Number.isFinite(configuredMax) && configuredMax > 0
+        ? configuredMax
+        : 100,
+      Math.round(requestedQuantity * 100) / 100
     );
-
-
 
     const selectedColor = String(
 
@@ -853,37 +895,38 @@ router.post("/items", customerAuth, async (req, res) => {
 
 
 
-    if (!productId || !mongoose.Types.ObjectId.isValid(productId)) {
+    if (isMeterProduct) {
+      const config = product.meterConfig || {};
+      const min = Number(config.minMeters ?? 1);
+      const max = config.maxMeters == null ? 100 : Number(config.maxMeters);
+      const increment = Number(config.incrementMeters ?? 1);
 
-      return res.status(400).json({
-
-        success: false,
-
-        message: "Valid productId is required",
-
-      });
-
+      if (quantity < min) {
+        return res.status(400).json({
+          success: false,
+          message: `Minimum order is ${min} meter${min === 1 ? "" : "s"}.`,
+          code: "METER_MINIMUM",
+          minMeters: min,
+        });
+      }
+      if (quantity > max) {
+        return res.status(400).json({
+          success: false,
+          message: product.bulkOrderNote || "Please contact our team for bulk orders.",
+          code: "METER_BULK",
+          maxMeters: max,
+        });
+      }
+      const steps = Math.round((quantity - min) / increment);
+      if (Math.abs(quantity - (min + steps * increment)) > 0.000001) {
+        return res.status(400).json({
+          success: false,
+          message: `Please order in increments of ${increment} meter${increment === 1 ? "" : "s"}.`,
+          code: "METER_INCREMENT",
+          incrementMeters: increment,
+        });
+      }
     }
-
-
-
-    const product = await Product.findById(productId).lean();
-
-
-
-    if (!product || product.status !== "published") {
-
-      return res.status(404).json({
-
-        success: false,
-
-        message: "Product not found or unavailable",
-
-      });
-
-    }
-
-
 
     const variant = getSelectedVariant(product, {
 
@@ -897,33 +940,62 @@ router.post("/items", customerAuth, async (req, res) => {
 
 
 
+    const activeVariants = Array.isArray(product?.variants)
+      ? product.variants.filter((variant) => variant?.active !== false)
+      : [];
+    const hasColorOptions =
+      Array.isArray(product?.options?.colors) &&
+      product.options.colors.length > 0;
+    const hasSizeOptions =
+      Array.isArray(product?.options?.sizes) &&
+      product.options.sizes.length > 0;
+    const hasVariantOptions = activeVariants.some((variant) =>
+      Boolean(
+        (typeof variant?.color === "string" && variant.color.trim()) ||
+        variant?.color?.name ||
+          variant?.color?.value ||
+          variant?.colorName ||
+          variant?.colorValue ||
+          (typeof variant?.size === "string" && variant.size.trim()) ||
+          variant?.size?.name ||
+          variant?.size?.value ||
+          variant?.sizeName ||
+          variant?.sizeValue
+      )
+    );
+    const hasSizeVariantOptions = activeVariants.some((variant) =>
+      Boolean(
+        (typeof variant?.size === "string" && variant.size.trim()) ||
+          variant?.size?.name ||
+          variant?.size?.value ||
+          variant?.sizeName ||
+          variant?.sizeValue
+      )
+    );
+    const hasColorVariantOptions = activeVariants.some((variant) =>
+      Boolean(
+        (typeof variant?.color === "string" && variant.color.trim()) ||
+          variant?.color?.name ||
+          variant?.color?.value ||
+          variant?.colorName ||
+          variant?.colorValue
+      )
+    );
     const variantsEnabled =
-
-      Boolean(product?.variantsEnabled) ||
-
-      (Array.isArray(product?.variants) && product.variants.length > 0);
-
-
-
-    if (variantsEnabled) {
-
-      const hasColorOptions =
-
-        Array.isArray(product?.options?.colors) &&
-
-        product.options.colors.length > 0;
+      !isMeterProduct &&
+      (
+        Boolean(product?.variantsEnabled) ||
+        activeVariants.length > 0
+      ) &&
+      (hasColorOptions || hasSizeOptions || hasVariantOptions);
 
 
 
-      const hasSizeOptions =
+    // Ready-made products use colour/size variants.
+    // Raw Fabric is meter-based and must NEVER require a variant/size.
+    if (!isMeterProduct && !product.meterConfig?.enabled) {
 
-        Array.isArray(product?.options?.sizes) &&
-
-        product.options.sizes.length > 0;
-
-
-
-      if (hasColorOptions && !selectedColor) {
+      if ((hasColorOptions || hasColorVariantOptions) && !selectedColor) {
 
         return res.status(400).json({
 
@@ -934,14 +1006,14 @@ router.post("/items", customerAuth, async (req, res) => {
         });
 
       }
+      if ((hasSizeOptions || hasSizeVariantOptions) && !selectedSize) {
+        return res.status(400).json({
+          success: false,
+          message: "Please select a size",
+        });
+      }
 
-
-
-      /* Size is optional. Validate it only when the customer selected one. */
-
-
-
-      if (!variant) {
+      if (hasVariantOptions && !variant) {
 
         return res.status(400).json({
 
@@ -955,7 +1027,7 @@ router.post("/items", customerAuth, async (req, res) => {
 
 
 
-      if (Number(variant.stock || 0) <= 0) {
+      if (variant && Number(variant.stock || 0) <= 0) {
 
         return res.status(400).json({
 
@@ -1113,7 +1185,7 @@ router.post("/items", customerAuth, async (req, res) => {
 
       message: "Added to cart",
 
-      cart: serializeCart(cart),
+      cart: await serializeCart(cart),
 
     });
 
@@ -1251,9 +1323,53 @@ router.patch("/items/:itemId", customerAuth, async (req, res) => {
 
 
 
-    item.quantity = Math.min(100, Math.floor(qty));
+    const isMeterProduct =
+      product.sellingMode === "meter" ||
+      product.meterConfig?.enabled === true;
 
+    const configuredMax = isMeterProduct
+      ? Number(product.meterConfig?.maxMeters ?? 100)
+      : 100;
 
+    const nextQuantity = Math.min(
+      Number.isFinite(configuredMax) && configuredMax > 0
+        ? configuredMax
+        : 100,
+      Math.round(qty * 100) / 100
+    );
+
+    if (isMeterProduct) {
+      const config = product.meterConfig || {};
+      const min = Number(config.minMeters ?? 1);
+      const max = config.maxMeters == null ? 100 : Number(config.maxMeters);
+      const increment = Number(config.incrementMeters ?? 1);
+
+      if (nextQuantity < min) {
+        return res.status(400).json({
+          success: false,
+          message: `Minimum order is ${min} meter${min === 1 ? "" : "s"}.`,
+        });
+      }
+      if (nextQuantity > max) {
+        return res.status(400).json({
+          success: false,
+          message: product.bulkOrderNote || "Please contact our team for bulk orders.",
+          code: "METER_BULK",
+          maxMeters: max,
+        });
+      }
+      const steps = Math.round((nextQuantity - min) / increment);
+      if (Math.abs(nextQuantity - (min + steps * increment)) > 0.000001) {
+        return res.status(400).json({
+          success: false,
+          message: `Please order in increments of ${increment} meter${increment === 1 ? "" : "s"}.`,
+          code: "METER_INCREMENT",
+          incrementMeters: increment,
+        });
+      }
+    }
+
+    item.quantity = nextQuantity;
 
     await cart.save();
 
@@ -1265,7 +1381,7 @@ router.patch("/items/:itemId", customerAuth, async (req, res) => {
 
       message: "Quantity updated",
 
-      cart: serializeCart(cart),
+      cart: await serializeCart(cart),
 
     });
 
@@ -1339,7 +1455,7 @@ router.delete("/items/:itemId", customerAuth, async (req, res) => {
 
       message: "Item removed",
 
-      cart: serializeCart(cart),
+      cart: await serializeCart(cart),
 
     });
 
@@ -1391,7 +1507,7 @@ router.delete("/", customerAuth, async (req, res) => {
 
       message: "Cart cleared",
 
-      cart: serializeCart(cart),
+      cart: await serializeCart(cart),
 
     });
 
