@@ -13,6 +13,7 @@ import {
   AUTH_SYNC_KEY,
   WISHLIST_SYNC_KEY,
   broadcastStorefrontChange,
+  requestCustomerLogin,
 } from "@/utils/storefrontSync";
 
 const API_URL = (
@@ -42,6 +43,7 @@ export function WishlistProvider({ children }) {
   const [busyProductIds, setBusyProductIds] = useState([]);
 
   const initialised = useRef(false);
+  const toggleSaveRef = useRef(null);
 
   /* ── 2. Load wishlist from server ── */
   const loadWishlist = useCallback(async () => {
@@ -137,10 +139,13 @@ export function WishlistProvider({ children }) {
 
     /* login guard */
     let activeCustomer = customer;
-    if (activeCustomer === null) {
+    if (!activeCustomer) {
       activeCustomer = await checkAuthAndLoad();
     }
     if (!activeCustomer) {
+      requestCustomerLogin(() =>
+        toggleSaveRef.current?.(productId)
+      );
       return { success: false, loginRequired: true, message: "Please login to save products" };
     }
 
@@ -228,6 +233,10 @@ export function WishlistProvider({ children }) {
     busyProductIds,
     checkAuthAndLoad,
   ]);
+
+  useEffect(() => {
+    toggleSaveRef.current = toggleSave;
+  }, [toggleSave]);
 
   /* ── 4. Is product saved? ── */
   const isSaved = useCallback((productId) => {

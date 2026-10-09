@@ -15,6 +15,7 @@ import {
   AUTH_SYNC_KEY,
   CART_SYNC_KEY,
   broadcastStorefrontChange,
+  requestCustomerLogin,
 } from "@/utils/storefrontSync";
 
 
@@ -66,6 +67,7 @@ export function CartProvider({ children }) {
 
 
   const initialised = useRef(false);
+  const addToCartRef = useRef(null);
 
 
 
@@ -296,7 +298,9 @@ export function CartProvider({ children }) {
 
 
       if (!activeCustomer) {
-
+        requestCustomerLogin(() =>
+          addToCartRef.current?.(productId, quantity, options)
+        );
         return {
 
           success: false,
@@ -364,7 +368,9 @@ export function CartProvider({ children }) {
 
 
           if (!refreshedCustomer) {
-
+            requestCustomerLogin(() =>
+              addToCartRef.current?.(productId, quantity, options)
+            );
             return {
 
               success: false,
@@ -455,11 +461,66 @@ export function CartProvider({ children }) {
 
 
 
+  const removeItem = useCallback(
+
+    async (itemId) => {
+
+      if (!itemId) {
+        throw new Error("Cart item not found");
+      }
+
+      try {
+
+        const response = await fetch(`${API_URL}/cart/items/${itemId}`, {
+
+          method: "DELETE",
+
+          credentials: "include",
+
+        });
+
+        if (response.status === 401) {
+
+          setCustomer(false);
+
+          setItems([]);
+
+          setItemCount(0);
+
+          throw new Error("Please log in to update your cart");
+
+        }
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !applyCartResponse(data)) {
+          throw new Error(data?.message || "Unable to remove item from cart");
+        }
+
+        broadcastStorefrontChange(CART_SYNC_KEY);
+        return data;
+
+      } catch (error) {
+
+        console.error("DELETE cart item error:", error);
+        throw error;
+
+      }
+
+    },
+
+    [applyCartResponse]
+
+  );
+
+
+
   const updateQuantity = useCallback(
 
     async (itemId, quantity) => {
 
-      if (!itemId) return;
+      if (!itemId) {
+        throw new Error("Cart item not found");
+      }
 
 
 
@@ -498,86 +559,29 @@ export function CartProvider({ children }) {
 
 
         if (response.status === 401) {
-
           setCustomer(false);
-
           setItems([]);
-
           setItemCount(0);
-
-          return;
-
+          throw new Error("Please log in to update your cart");
         }
 
 
 
-        const data = await response.json();
-        if (applyCartResponse(data)) {
-          broadcastStorefrontChange(CART_SYNC_KEY);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !applyCartResponse(data)) {
+          throw new Error(data?.message || "Unable to update cart quantity");
         }
+        broadcastStorefrontChange(CART_SYNC_KEY);
+        return data;
 
-      } catch {
-
-        /* silent */
-
+      } catch (error) {
+        console.error("PATCH updateQuantity error:", error);
+        throw error;
       }
 
     },
 
-    [applyCartResponse]
-
-  );
-
-
-
-  const removeItem = useCallback(
-
-    async (itemId) => {
-
-      if (!itemId) return;
-
-
-
-      try {
-
-        const response = await fetch(`${API_URL}/cart/items/${itemId}`, {
-
-          method: "DELETE",
-
-          credentials: "include",
-
-        });
-
-
-
-        if (response.status === 401) {
-
-          setCustomer(false);
-
-          setItems([]);
-
-          setItemCount(0);
-
-          return;
-
-        }
-
-
-
-        const data = await response.json();
-        if (applyCartResponse(data)) {
-          broadcastStorefrontChange(CART_SYNC_KEY);
-        }
-
-      } catch {
-
-        /* silent */
-
-      }
-
-    },
-
-    [applyCartResponse]
+    [applyCartResponse, removeItem]
 
   );
 
@@ -983,6 +987,17 @@ export function CartProvider({ children }) {
           data = {};
         }
 
+        if (response.status === 401) {
+          setCustomer(false);
+          setBuyNowItems([]);
+          setBuyNowSessionId("");
+          return {
+            success: false,
+            loginRequired: true,
+            message: "Please login to buy now",
+          };
+        }
+
         if (!response.ok || !data?.success) {
           return {
             success: false,
@@ -1016,6 +1031,15 @@ export function CartProvider({ children }) {
         if (!restored?.success) {
           setBuyNowItems([]);
           setBuyNowSessionId("");
+
+          if (restored?.loginRequired) {
+            setCustomer(false);
+            return {
+              success: false,
+              loginRequired: true,
+              message: restored.message || "Please login to buy now",
+            };
+          }
 
           return {
             success: false,
@@ -1062,6 +1086,10 @@ export function CartProvider({ children }) {
       restoreBuyNowSession,
     ]
   );
+
+  useEffect(() => {
+    addToCartRef.current = addToCart;
+  }, [addToCart]);
 
   const clearBuyNowItems = useCallback(() => {
     setBuyNowItems([]);

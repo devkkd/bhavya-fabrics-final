@@ -339,9 +339,9 @@ export default function Footer() {
         const sortedRows = [...rows]
           .filter((item) => item?.category || item?.name || item?.label || item?.title)
           .sort((a, b) => {
-            const aDate = new Date(a?.createdAt || a?.updatedAt || 0).getTime();
-            const bDate = new Date(b?.createdAt || b?.updatedAt || 0).getTime();
-            return bDate - aDate;
+            const aOrder = Number(a?.order || 0);
+            const bOrder = Number(b?.order || 0);
+            return aOrder - bOrder;
           });
 
         const latest = [];
@@ -353,7 +353,7 @@ export default function Footer() {
           if (!slug || seen.has(slug)) continue;
           seen.add(slug);
           latest.push({ label, href: `/collection/${item?.slug || slug}` });
-          if (latest.length === 4) break;
+          if (latest.length === 6) break;
         }
 
         if (mounted) setCollectionsLinks(latest.length ? latest : FALLBACK_COLLECTIONS);

@@ -1821,14 +1821,39 @@ export default function NewArrivalsPage() {
     const id = String(product.id);
     const state = cartStates[id] || "idle";
     if (state === "loading" || state === "updating" || state === "removing") return;
+    
     const cartItem = getCartItemForProduct(product);
     if (!cartItem) return;
+    
     const isMeter = product?.sellingMode === "meter";
-    const { min, max, step } = isMeter ? getMeterConfig(product) : { min: 1, max: 100, step: 1 };
+    const selectedVariant = getSelectedVariant(product);
+    
+    // Get limits based on selling mode and variant stock
+    let min = 1, max = 100, step = 1;
+    
+    if (isMeter) {
+      const config = getMeterConfig(product);
+      min = config.min;
+      max = config.max;
+      step = config.step;
+    }
+    
+    // For piece products with variants, check variant stock
+    if (!isMeter && selectedVariant?.stock) {
+      max = Math.min(max, Number(selectedVariant.stock));
+    }
+    
     const currentQty = Math.max(min, Number(cartItem.quantity) || min);
     const delta = direction === "increase" ? step : -step;
     const nextQty = Math.min(max, Math.max(min, Math.round((currentQty + delta) * 100) / 100));
-    if (nextQty === currentQty) return;
+    
+    if (nextQty === currentQty) {
+      if (nextQty >= max && direction === "increase") {
+        setCardMessage(id, `Max quantity: ${max} units`);
+      }
+      return;
+    }
+    
     setCartStates((current) => ({ ...current, [id]: "updating" }));
     try {
       await updateQuantity(cartItem._id, nextQty);
@@ -1836,7 +1861,7 @@ export default function NewArrivalsPage() {
     } catch (error) {
       console.error("Failed to update cart quantity:", error);
       setCartStates((current) => ({ ...current, [id]: "idle" }));
-      setCardMessage(id, "Failed to update quantity");
+      setCardMessage(id, error?.message || "Failed to update quantity");
     }
   };
 
@@ -2913,6 +2938,18 @@ export default function NewArrivalsPage() {
                                     className="arrival-qty-btn"
 
                                     onClick={() => changeCartQuantity(product, "increase")}
+
+                                    disabled={(() => {
+                                      const selectedVariant = getSelectedVariant(product);
+                                      const isMeter = product?.sellingMode === "meter";
+                                      let max = 100;
+                                      if (isMeter) {
+                                        max = getMeterConfig(product).max;
+                                      } else if (selectedVariant?.stock) {
+                                        max = Math.min(100, Number(selectedVariant.stock));
+                                      }
+                                      return quantity >= max;
+                                    })()}
 
                                     aria-label={`Increase ${product.name} quantity`}
 

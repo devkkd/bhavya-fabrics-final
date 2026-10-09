@@ -9,6 +9,7 @@ import { usePathname, useRouter } from "next/navigation";
 
 
 import CustomerLoginModal from "./CustomerLoginModal";
+import { CUSTOMER_LOGIN_REQUEST_EVENT } from "@/utils/storefrontSync";
 
 
 
@@ -430,6 +431,29 @@ export default function Header({ wishlistCount = 0, cartCount = 0 }) {
   const closeTimer = useRef(null);
 
   const searchAbortRef = useRef(null);
+  const pendingLoginActionRef = useRef(null);
+
+  useEffect(() => {
+    const handleLoginRequest = (event) => {
+      pendingLoginActionRef.current =
+        typeof event.detail?.onSuccess === "function"
+          ? event.detail.onSuccess
+          : null;
+      setLoginPopupOpen(true);
+    };
+
+    window.addEventListener(
+      CUSTOMER_LOGIN_REQUEST_EVENT,
+      handleLoginRequest
+    );
+
+    return () => {
+      window.removeEventListener(
+        CUSTOMER_LOGIN_REQUEST_EVENT,
+        handleLoginRequest
+      );
+    };
+  }, []);
 
 
 
@@ -1916,19 +1940,22 @@ export default function Header({ wishlistCount = 0, cartCount = 0 }) {
         open={loginPopupOpen}
 
         onClose={() => {
-
+          pendingLoginActionRef.current = null;
           setLoginPopupOpen(false);
-
         }}
-
         onSuccess={(user) => {
-
+          const pendingAction = pendingLoginActionRef.current;
+          pendingLoginActionRef.current = null;
           setCustomer(user);
-
           setLoginPopupOpen(false);
-
+          if (pendingAction) {
+            Promise.resolve()
+              .then(pendingAction)
+              .catch((error) => {
+                console.error("Deferred customer action failed:", error);
+              });
+          }
         }}
-
       />
 
 

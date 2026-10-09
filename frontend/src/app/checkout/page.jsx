@@ -1309,7 +1309,7 @@ const {
     isLoggedIn,
     isBuyNowMode,
     urlSessionId,
-    effectiveBuyNowItems,
+    effectiveBuyNowItems?.length,
     itemsToDisplay.length,
   ]);
 

@@ -18,6 +18,7 @@ import {
 
 import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
+import { requestCustomerLogin } from "@/utils/storefrontSync";
 
 const API_URL = (
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api"
@@ -1125,6 +1126,7 @@ export default function SellingModeCatalog({
           id,
           "Please login to continue with Buy Now"
         );
+        requestCustomerLogin(() => handleBuyNow(product));
         return;
       }
 

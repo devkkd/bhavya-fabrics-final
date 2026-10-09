@@ -87,7 +87,7 @@ router.get("/", async (req, res) => {
           "name slug"
         )
         .sort({
-          createdAt: -1
+          order: 1
         })
         .lean();
 
@@ -129,7 +129,7 @@ router.get(
             "name slug"
           )
           .sort({
-            createdAt: -1
+            order: 1
           })
           .lean();
 
@@ -227,7 +227,8 @@ router.post(
         metaTitle,
         metaDescription,
         showOnHome,
-        status
+        status,
+        order
       } = req.body;
 
       if (!name) {
@@ -298,7 +299,9 @@ router.post(
           showOnHome:
             Boolean(showOnHome),
           status:
-            status || "published"
+            status || "published",
+          order:
+            Number(order) || 0
         });
 
       const populated =
@@ -352,7 +355,8 @@ router.put(
         metaTitle,
         metaDescription,
         showOnHome,
-        status
+        status,
+        order
       } = req.body;
 
       const updateData = {};
@@ -441,6 +445,11 @@ router.put(
       if (status !== undefined) {
         updateData.status =
           status;
+      }
+
+      if (order !== undefined) {
+        updateData.order =
+          Number(order);
       }
 
       const subCategory =

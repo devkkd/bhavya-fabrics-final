@@ -52,6 +52,10 @@ const { startProductSaleExpiryWatcher } =
   const heroSettingsRoutes = require("./routes/heroSettings");
 const blogRoutes = require("./routes/blogs");
 const catalogueRoutes = require("./routes/catalogue");
+const reviewRoutes = require("./routes/reviews");
+const dashboardRoutes = require("./routes/dashboard");
+const templateRoutes = require("./routes/templates");
+const bulkUploadRoutes = require("./routes/bulkUpload");
 
 const app = express();
 
@@ -271,6 +275,10 @@ app.use(
   "/api/hero-settings",
   heroSettingsRoutes
 );
+app.use("/api/reviews", reviewRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/templates", templateRoutes);
+app.use("/api/bulk-upload", bulkUploadRoutes);
 
 app.use("/api/blogs", blogRoutes);
 app.use("/api/catalogue", catalogueRoutes);

@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -20,6 +20,7 @@ import { products as fallbackProducts } from "../../data/product";
 import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
 import CartStatusButton from "@/components/CartStatusButton";
+import { requestCustomerLogin } from "@/utils/storefrontSync";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api";
@@ -3256,6 +3257,7 @@ export default function ProductDetailPage() {
 
   const [loginPrompt, setLoginPrompt] =
     useState(false);
+  const buyNowHandlerRef = useRef(null);
 
   const [
     relatedProducts,
@@ -4379,6 +4381,9 @@ export default function ProductDetailPage() {
         result?.loginRequired
       ) {
         setLoginPrompt(true);
+        requestCustomerLogin(() =>
+          buyNowHandlerRef.current?.()
+        );
         return;
       }
 
@@ -4403,6 +4408,10 @@ export default function ProductDetailPage() {
       prepareBuyNow,
       router,
     ]);
+
+  useEffect(() => {
+    buyNowHandlerRef.current = handleBuyNow;
+  }, [handleBuyNow]);
 
   // ---------- IMAGE NAVIGATION ----------
 

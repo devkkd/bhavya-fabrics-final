@@ -2131,6 +2131,25 @@ function CollectionPageContent() {
     return items[0] || null;
   };
 
+  const getCartItemStockLimit = (product, item) => {
+    const variantId = String(item?.variantId || "");
+
+    if (variantId) {
+      const variant = product?.variants?.find(
+        (candidate) => String(candidate?.id || "") === variantId
+      );
+
+      return variant ? Number(variant.stock) : null;
+    }
+
+    if (!product?.variantsEnabled) {
+      const stock = Number(product?.inventory?.stock);
+      return Number.isFinite(stock) ? stock : null;
+    }
+
+    return null;
+  };
+
   const getCartSelectionForProduct =
     (product) => {
       const items =
@@ -2895,6 +2914,10 @@ function CollectionPageContent() {
           Number(item?.quantity) || min
         );
 
+      const stockLimit = isMeter
+        ? null
+        : getCartItemStockLimit(product, item);
+
       if (
         direction === "decrease" &&
         currentQuantity <= min
@@ -2914,6 +2937,14 @@ function CollectionPageContent() {
           Number(rawNext.toFixed(2))
         )
       );
+
+      if (
+        direction === "increase" &&
+        stockLimit !== null &&
+        nextQuantity > stockLimit
+      ) {
+        return;
+      }
 
       setCartStates(
         (current) => ({
@@ -6382,6 +6413,14 @@ function CollectionPageContent() {
                                 );
 
                               if (item) {
+                                const stockLimit =
+                                  product?.sellingMode === "meter"
+                                    ? null
+                                    : getCartItemStockLimit(
+                                        product,
+                                        item
+                                      );
+
                                 return (
                                   <div
                                     className={`product-cart-control ${
@@ -6449,6 +6488,18 @@ function CollectionPageContent() {
                                               product,
                                               "increase"
                                             )
+                                          }
+                                          disabled={
+                                            stockLimit !== null &&
+                                            Number(item?.quantity) >=
+                                              stockLimit
+                                          }
+                                          title={
+                                            stockLimit !== null &&
+                                            Number(item?.quantity) >=
+                                              stockLimit
+                                              ? "Maximum available quantity reached"
+                                              : undefined
                                           }
                                           aria-label="Increase quantity"
                                         >

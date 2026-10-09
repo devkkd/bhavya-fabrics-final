@@ -40,7 +40,8 @@ const emptyCategory = {
   metaDescription: "",
   showOnHome: false,
   showInNavigation: true,
-  status: "published"
+  status: "published",
+  order: 0
 };
 
 const emptySubCategory = {
@@ -51,7 +52,8 @@ const emptySubCategory = {
   metaTitle: "",
   metaDescription: "",
   showOnHome: false,
-  status: "published"
+  status: "published",
+  order: 0
 };
 
 export default function CategoriesPage() {
@@ -396,7 +398,9 @@ export default function CategoriesPage() {
             : true,
         status:
           category.status ||
-          "published"
+          "published",
+        order:
+          category.order || 0
       });
 
       setCategoryFormOpen(
@@ -468,7 +472,10 @@ export default function CategoriesPage() {
 
         status:
           subCategory.status ||
-          "published"
+          "published",
+
+        order:
+          subCategory.order || 0
       });
 
       setSubCategoryFormOpen(
@@ -1632,6 +1639,14 @@ export default function CategoriesPage() {
                         styles.th
                       }
                     >
+                      Order
+                    </th>
+
+                    <th
+                      style={
+                        styles.th
+                      }
+                    >
                       Actions
                     </th>
                   </tr>
@@ -1850,6 +1865,16 @@ export default function CategoriesPage() {
                               styles.td
                             }
                           >
+                            {
+                              category.order || 0
+                            }
+                          </td>
+
+                          <td
+                            style={
+                              styles.td
+                            }
+                          >
                             <div
                               style={
                                 styles.actionWrap
@@ -1988,6 +2013,14 @@ export default function CategoriesPage() {
                       }
                     >
                       Status
+                    </th>
+
+                    <th
+                      style={
+                        styles.th
+                      }
+                    >
+                      Order
                     </th>
 
                     <th
@@ -2137,6 +2170,16 @@ export default function CategoriesPage() {
                               subCategory.status
                             }
                           </span>
+                        </td>
+
+                        <td
+                          style={
+                            styles.td
+                          }
+                        >
+                          {
+                            subCategory.order || 0
+                          }
                         </td>
 
                         <td
@@ -2680,6 +2723,52 @@ export default function CategoriesPage() {
                   />
                 </div>
 
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>
+                    Display Order
+                  </label>
+
+                  <input
+                    type="number"
+                    value={
+                      categoryForm.order || 0
+                    }
+                    onChange={(
+                      e
+                    ) =>
+                      setCategoryForm(
+                        {
+                          ...categoryForm,
+                          order:
+                            Number(
+                              e.target
+                                .value
+                            )
+                        }
+                      )
+                    }
+                    placeholder="0"
+                    style={
+                      styles.input
+                    }
+                  />
+
+                  <p
+                    style={{
+                      fontSize:
+                        "12px",
+                      color:
+                        "#666",
+                      marginTop:
+                        "4px"
+                    }}
+                  >
+                    Lower numbers appear
+                    first. (0 = first,
+                    1 = second, etc.)
+                  </p>
+                </div>
+
                 <div
                   style={
                     styles.toggleRow
@@ -3130,6 +3219,52 @@ export default function CategoriesPage() {
                       styles.input
                     }
                   />
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>
+                    Display Order
+                  </label>
+
+                  <input
+                    type="number"
+                    value={
+                      subCategoryForm.order || 0
+                    }
+                    onChange={(
+                      e
+                    ) =>
+                      setSubCategoryForm(
+                        {
+                          ...subCategoryForm,
+                          order:
+                            Number(
+                              e.target
+                                .value
+                            )
+                        }
+                      )
+                    }
+                    placeholder="0"
+                    style={
+                      styles.input
+                    }
+                  />
+
+                  <p
+                    style={{
+                      fontSize:
+                        "12px",
+                      color:
+                        "#666",
+                      marginTop:
+                        "4px"
+                    }}
+                  >
+                    Lower numbers appear
+                    first. (0 = first,
+                    1 = second, etc.)
+                  </p>
                 </div>
 
                 <div

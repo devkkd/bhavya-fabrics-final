@@ -119,6 +119,12 @@ const categorySchema = new mongoose.Schema(
       enum: ["draft", "published", "archived"],
       default: "published",
       index: true
+    },
+
+    order: {
+      type: Number,
+      default: 0,
+      index: true
     }
   },
   {

@@ -5,6 +5,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { useSmartAutoRefresh } from "@/hooks/useAutoRefresh";
 
 import {
   Plus,
@@ -721,6 +722,9 @@ export default function ProductsPage() {
       mounted = false;
     };
   }, []);
+
+  // Auto-refresh products every 25 seconds
+  useSmartAutoRefresh(() => loadProducts(), 25000);
 
   /* ===================================================
      AVAILABLE SUBCATEGORIES

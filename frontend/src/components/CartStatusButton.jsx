@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, Minus, Plus, ShoppingCart } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 
@@ -259,23 +259,64 @@ export default function CartStatusButton({
   compact = false,
   showLabel = true,
 }) {
-  const { addToCart, isInCart, items: cartItems, updateQuantity, removeItem } =
-    useCart();
+  const { addToCart, items: cartItems, updateQuantity, removeItem } = useCart();
 
   const [state, setState] = useState("idle");
   const timeoutRef = useRef(null);
 
-  /* Helper: Get cart item for this product */
-  const getCartItem = useCallback(() => {
-    return cartItems.find(
+  const cartItem = useMemo(() => {
+    const productLines = cartItems.filter(
       (item) => item.productId?.toString() === productId?.toString()
     );
-  }, [cartItems, productId]);
+    if (variantId) {
+      return productLines.find(
+        (item) => item.variantId?.toString() === variantId.toString()
+      ) || null;
+    }
+
+    const normalize = (value) =>
+      String(
+        value && typeof value === "object"
+          ? value.name || value.value || value.label || ""
+          : value || ""
+      ).trim().toLowerCase();
+    const wantedColor = normalize(selectedColor);
+    const wantedSize = normalize(selectedSize);
+
+    return productLines.find((item) => {
+      const itemColor = normalize(item.selectedColor);
+      const itemSize = normalize(item.selectedSize);
+      return itemColor === wantedColor && itemSize === wantedSize;
+    }) || null;
+  }, [cartItems, productId, selectedColor, selectedSize, variantId]);
+
+  const inCart = Boolean(cartItem);
+  const quantityStep =
+    cartItem?.sellingMode === "meter"
+      ? Math.max(
+          0.01,
+          Number(cartItem?.snapshot?.meterConfig?.incrementMeters ?? 1) || 1
+        )
+      : 1;
+  const minimumQuantity =
+    cartItem?.sellingMode === "meter"
+      ? Math.max(
+          1,
+          Number(cartItem?.snapshot?.meterConfig?.minMeters ?? 1) || 1
+        )
+      : 1;
+  const maximumQuantity =
+    cartItem?.sellingMode === "meter"
+      ? Math.max(
+          minimumQuantity,
+          Number(cartItem?.snapshot?.meterConfig?.maxMeters ?? 100) || 100
+        )
+      : 100;
 
   /* Main Add to Cart handler */
   const handleAddToCart = useCallback(async () => {
     /* Prevent duplicate requests */
-    if (state === "animating" || isInCart(productId)) {
+    if (state !== "idle" || inCart) {
       return;
     }
 
@@ -311,8 +352,8 @@ export default function CartStatusButton({
     }
   }, [
     state,
+    inCart,
     productId,
-    isInCart,
     addToCart,
     onAdd,
     quantity,
@@ -323,28 +364,59 @@ export default function CartStatusButton({
   ]);
 
   /* Decrease quantity handler */
-  const handleDecreaseQty = useCallback(() => {
-    const cartItem = getCartItem();
-    if (cartItem && cartItem.quantity > 1) {
-      updateQuantity(cartItem._id, cartItem.quantity - 1);
+  const handleDecreaseQty = useCallback(async () => {
+    if (
+      state !== "idle" ||
+      !cartItem ||
+      cartItem.quantity <= minimumQuantity
+    ) return;
+    setState("updating");
+    try {
+      await updateQuantity(
+        cartItem._id,
+        Number(Math.max(minimumQuantity, cartItem.quantity - quantityStep).toFixed(4))
+      );
+    } catch (error) {
+      console.error("Failed to decrease cart quantity:", error);
+    } finally {
+      setState("idle");
     }
-  }, [getCartItem, updateQuantity]);
+  }, [cartItem, minimumQuantity, quantityStep, state, updateQuantity]);
 
   /* Increase quantity handler */
-  const handleIncreaseQty = useCallback(() => {
-    const cartItem = getCartItem();
-    if (cartItem) {
-      updateQuantity(cartItem._id, cartItem.quantity + 1);
+  const handleIncreaseQty = useCallback(async () => {
+    if (
+      state !== "idle" ||
+      !cartItem ||
+      cartItem.quantity >= maximumQuantity
+    ) return;
+    setState("updating");
+    try {
+      await updateQuantity(
+        cartItem._id,
+        Number(
+          Math.min(maximumQuantity, cartItem.quantity + quantityStep).toFixed(4)
+        )
+      );
+    } catch (error) {
+      console.error("Failed to increase cart quantity:", error);
+    } finally {
+      setState("idle");
     }
-  }, [getCartItem, updateQuantity]);
+  }, [cartItem, maximumQuantity, quantityStep, state, updateQuantity]);
 
   /* Remove from cart handler */
-  const handleRemove = useCallback(() => {
-    const cartItem = getCartItem();
-    if (cartItem) {
-      removeItem(cartItem._id);
+  const handleRemove = useCallback(async () => {
+    if (state !== "idle" || !cartItem) return;
+    setState("updating");
+    try {
+      await removeItem(cartItem._id);
+    } catch (error) {
+      console.error("Failed to remove cart item:", error);
+    } finally {
+      setState("idle");
     }
-  }, [getCartItem, removeItem]);
+  }, [cartItem, removeItem, state]);
 
   /* Cleanup on unmount */
   useEffect(() => {
@@ -360,10 +432,8 @@ export default function CartStatusButton({
       <style dangerouslySetInnerHTML={{ __html: STYLES }} />
       
       {/* Product is in cart - show quantity controls */}
-      {isInCart(productId) ? (
+      {inCart ? (
         (() => {
-          const cartItem = getCartItem();
-
           if (compact) {
             /* Compact version for product cards */
             return (
@@ -372,7 +442,7 @@ export default function CartStatusButton({
                   type="button"
                   className="cart-qty-compact-btn"
                   onClick={handleDecreaseQty}
-                  disabled={!cartItem || cartItem.quantity <= 1}
+                  disabled={state !== "idle" || cartItem.quantity <= minimumQuantity}
                   aria-label="Decrease quantity"
                 >
                   <Minus size={11} />
@@ -384,6 +454,7 @@ export default function CartStatusButton({
                   type="button"
                   className="cart-qty-compact-btn"
                   onClick={handleIncreaseQty}
+                  disabled={state !== "idle" || cartItem.quantity >= maximumQuantity}
                   aria-label="Increase quantity"
                 >
                   <Plus size={11} />
@@ -400,7 +471,7 @@ export default function CartStatusButton({
                   type="button"
                   className="cart-qty-btn"
                   onClick={handleDecreaseQty}
-                  disabled={!cartItem || cartItem.quantity <= 1}
+                  disabled={state !== "idle" || cartItem.quantity <= minimumQuantity}
                   aria-label="Decrease quantity"
                 >
                   <Minus size={15} />
@@ -412,6 +483,7 @@ export default function CartStatusButton({
                   type="button"
                   className="cart-qty-btn"
                   onClick={handleIncreaseQty}
+                  disabled={state !== "idle" || cartItem.quantity >= maximumQuantity}
                   aria-label="Increase quantity"
                 >
                   <Plus size={15} />
@@ -422,6 +494,7 @@ export default function CartStatusButton({
                 type="button"
                 className="cart-remove-btn"
                 onClick={handleRemove}
+                disabled={state !== "idle"}
                 aria-label="Remove from cart"
               >
                 Remove

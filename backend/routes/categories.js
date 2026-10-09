@@ -68,7 +68,7 @@ router.get("/", async (req, res) => {
     const categories =
       await Category.find(filter)
         .sort({
-          createdAt: -1
+          order: 1
         })
         .lean();
 
@@ -77,7 +77,7 @@ router.get("/", async (req, res) => {
         status: "published"
       })
         .sort({
-          createdAt: -1
+          order: 1
         })
         .lean();
 
@@ -141,7 +141,7 @@ router.get(
       const categories =
         await Category.find({})
           .sort({
-            createdAt: -1
+            order: 1
           })
           .lean();
 
@@ -152,7 +152,7 @@ router.get(
             "name slug"
           )
           .sort({
-            createdAt: -1
+            order: 1
           })
           .lean();
 
@@ -234,7 +234,7 @@ router.get(
             "published"
         })
           .sort({
-            createdAt: -1
+            order: 1
           })
           .lean();
 
@@ -280,7 +280,8 @@ router.post(
         metaDescription,
         showOnHome,
         showInNavigation,
-        status
+        status,
+        order
       } = req.body;
 
       if (!name) {
@@ -332,7 +333,9 @@ router.post(
                 )
               : true,
           status:
-            status || "published"
+            status || "published",
+          order:
+            Number(order) || 0
         });
 
       return res.status(201).json({
@@ -379,7 +382,8 @@ router.put(
         metaDescription,
         showOnHome,
         showInNavigation,
-        status
+        status,
+        order
       } = req.body;
 
       const updateData = {};
@@ -458,6 +462,11 @@ router.put(
       if (status !== undefined) {
         updateData.status =
           status;
+      }
+
+      if (order !== undefined) {
+        updateData.order =
+          Number(order);
       }
 
       const category =

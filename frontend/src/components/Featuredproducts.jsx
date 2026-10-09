@@ -180,6 +180,30 @@ function firstSizeValue(sizes) {
   return sizes?.[0]?.value || sizes?.[0]?.name || "";
 }
 
+function getMeterConfig(product) {
+  const config = product?.meterConfig || {};
+  const min = Math.max(0.01, Number(config.minMeters ?? 1) || 1);
+  const max = Math.max(min, Number(config.maxMeters ?? 100) || 100);
+  const step = Math.max(0.01, Number(config.incrementMeters ?? 1) || 1);
+
+  return { min, max, step };
+}
+
+function getMeterOptions(config) {
+  const count = Math.floor((config.max - config.min) / config.step) + 1;
+  if (count > 200) return null;
+
+  return Array.from({ length: count }, (_, index) =>
+    Number((config.min + index * config.step).toFixed(4))
+  );
+}
+
+function formatMeters(value) {
+  return Number.isInteger(Number(value))
+    ? String(Number(value))
+    : Number(value).toFixed(2).replace(/\.?0+$/, "");
+}
+
 function toNumber(value) {
   return Number(String(value ?? "0").replace(/[^\d.]/g, "")) || 0;
 }
@@ -310,6 +334,13 @@ function normalizeBackendProduct(item) {
     variants,
     variantsEnabled: Boolean(item?.variantsEnabled || variants.length > 0),
     sellingMode: item?.sellingMode === "meter" ? "meter" : "piece",
+    meterConfig: {
+      enabled: item?.sellingMode === "meter" || item?.meterConfig?.enabled === true,
+      minMeters: item?.meterConfig?.minMeters ?? 1,
+      maxMeters: item?.meterConfig?.maxMeters ?? 100,
+      incrementMeters: item?.meterConfig?.incrementMeters ?? 1,
+      foldLength: item?.meterConfig?.foldLength ?? "",
+    },
     priceUnit:
       item?.priceUnit ||
       (item?.sellingMode === "meter" ? "Per Meter" : "Per Piece"),
@@ -353,6 +384,9 @@ function ProductCard({ product }) {
   const [selectedSize, setSelectedSize] = useState(
     firstSizeValue(product?.sizeOptions)
   );
+  const [selectedMeters, setSelectedMeters] = useState(
+    getMeterConfig(product).min
+  );
   const [mobileHover, setMobileHover] = useState(false);
   const [cartState, setCartState] = useState("idle"); // idle | loading | added | updating | removing
   const [message, setMessage] = useState("");
@@ -395,6 +429,9 @@ function ProductCard({ product }) {
 
   const selectedColor =
     selectedColorOption?.name || selectedColorOption?.value || "";
+  const isMeterProduct = product?.sellingMode === "meter";
+  const meterConfig = getMeterConfig(product);
+  const meterOptions = getMeterOptions(meterConfig);
 
   /* ---------- sizes valid for the chosen colour ---------- */
   const availableSizes = useMemo(() => {
@@ -459,6 +496,8 @@ function ProductCard({ product }) {
 
   /* ---------- selected variant ---------- */
   const selectedVariant = useMemo(() => {
+    if (product?.sellingMode === "meter") return null;
+
     if (
       !product?.variantsEnabled ||
       !Array.isArray(product?.variants) ||
@@ -562,6 +601,17 @@ function ProductCard({ product }) {
         const wantsColor = Boolean(selectedColorOption);
         const wantsSize = Boolean(selectedSize);
 
+        // Special handling for piece products with no color/size options
+        if (!wantsColor && !wantsSize) {
+          // Piece product - match items with no variant, no color, no size
+          return (
+            !itemVariantId &&
+            !getOptionName(item?.selectedColor) &&
+            !getOptionName(item?.selectedSize)
+          );
+        }
+
+        // For products that want color or size
         if (wantsColor || wantsSize) {
           const colorOk = wantsColor
             ? optionMatches(item?.selectedColor, selectedColorOption)
@@ -574,11 +624,7 @@ function ProductCard({ product }) {
           return colorOk && sizeOk;
         }
 
-        return (
-          !itemVariantId &&
-          !getOptionName(item?.selectedColor) &&
-          !getOptionName(item?.selectedSize)
-        );
+        return false;
       }) || null
     );
   }, [cartItems, product.id, selectedVariant, selectedColorOption, selectedSize]);
@@ -626,6 +672,7 @@ function ProductCard({ product }) {
     if (busy) return;
 
     if (
+      !isMeterProduct &&
       product?.variantsEnabled &&
       product?.variants?.length > 0 &&
       (product?.colorOptions?.length > 0 ||
@@ -644,11 +691,15 @@ function ProductCard({ product }) {
     setCartState("loading");
 
     try {
-      const result = await addToCart(String(product.id), 1, {
-        selectedColor: selectedColor || "",
-        selectedSize: selectedSize || "",
-        variantId: selectedVariant?.id || "",
-      });
+      const result = await addToCart(
+        String(product.id),
+        isMeterProduct ? selectedMeters : 1,
+        {
+          selectedColor: isMeterProduct ? "" : selectedColor || "",
+          selectedSize: isMeterProduct ? "" : selectedSize || "",
+          variantId: selectedVariant?.id || "",
+        }
+      );
 
       if (result?.loginRequired) {
         setCartState("idle");
@@ -675,17 +726,28 @@ function ProductCard({ product }) {
   const handleChangeQuantity = async (direction) => {
     if (busy || !cartItem) return;
 
-    if (direction === "decrease" && quantity <= 1) return;
+    const minimum = isMeterProduct ? meterConfig.min : 1;
+    const maximum = isMeterProduct
+      ? meterConfig.max
+      : selectedVariant?.stock > 0
+        ? Math.min(100, selectedVariant.stock)
+        : 100;
+    if (direction === "decrease" && quantity <= minimum) return;
+    if (direction === "increase" && quantity >= maximum) return;
 
-    const nextQty = direction === "increase" ? quantity + 1 : quantity - 1;
+    const step = isMeterProduct ? meterConfig.step : 1;
+    const nextQty = direction === "increase"
+      ? Math.min(maximum, Number((quantity + step).toFixed(4)))
+      : Math.max(minimum, Number((quantity - step).toFixed(4)));
 
     setCartState("updating");
 
     try {
       await updateQuantity(cartItem._id, nextQty);
+      // Force a slight delay to ensure UI updates with new cart data
     } catch (error) {
       console.error("Failed to update cart quantity:", error);
-      flashMessage("Failed to update quantity");
+      flashMessage(error?.message || "Failed to update quantity");
     } finally {
       setCartState("idle");
     }
@@ -766,10 +828,64 @@ function ProductCard({ product }) {
 
         {showSku ? <div className="pc-sku">SKU: {selectedSku}</div> : null}
 
-        {productColorOptions.length > 0 ||
+        {isMeterProduct ||
+        productColorOptions.length > 0 ||
         (Array.isArray(product?.sizeOptions) && product.sizeOptions.length > 0) ? (
           <div className="pc-options">
-            {productColorOptions.length > 0 ? (
+            {isMeterProduct ? (
+              <div className="pc-option-row">
+                <label className="pc-option-label" htmlFor={`pc-meter-${product.id}`}>
+                  Meter
+                </label>
+                {meterOptions ? (
+                  <select
+                    id={`pc-meter-${product.id}`}
+                    className="pc-meter-select"
+                    value={selectedMeters}
+                    onChange={(event) => setSelectedMeters(Number(event.target.value))}
+                    aria-label={`Select meter quantity for ${product.title}`}
+                  >
+                    {meterOptions.map((meters) => (
+                      <option key={meters} value={meters}>
+                        {formatMeters(meters)} m
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    id={`pc-meter-${product.id}`}
+                    className="pc-meter-select"
+                    type="number"
+                    min={meterConfig.min}
+                    max={meterConfig.max}
+                    step={meterConfig.step}
+                    value={selectedMeters}
+                    onChange={(event) => {
+                      const value = Number(event.target.value);
+                      if (Number.isFinite(value)) {
+                        const steps = Math.round(
+                          (value - meterConfig.min) / meterConfig.step
+                        );
+                        setSelectedMeters(
+                          Number(
+                            Math.min(
+                              meterConfig.max,
+                              Math.max(
+                                meterConfig.min,
+                                meterConfig.min + steps * meterConfig.step
+                              )
+                            ).toFixed(4)
+                          )
+                        );
+                      }
+                    }}
+                    aria-label={`Select meter quantity for ${product.title}`}
+                  />
+                )}
+              </div>
+            ) : null}
+
+            {!isMeterProduct && productColorOptions.length > 0 ? (
               <div className="pc-option-row">
                 <span className="pc-option-label">Color</span>
 
@@ -800,7 +916,7 @@ function ProductCard({ product }) {
               </div>
             ) : null}
 
-            {Array.isArray(product?.sizeOptions) &&
+            {!isMeterProduct && Array.isArray(product?.sizeOptions) &&
             product.sizeOptions.length > 0 ? (
               <div className="pc-option-row">
                 <span className="pc-option-label">Size</span>
@@ -858,18 +974,32 @@ function ProductCard({ product }) {
                       type="button"
                       className="pc-qty-btn"
                       onClick={() => handleChangeQuantity("decrease")}
-                      disabled={quantity <= 1}
+                      disabled={
+                        quantity <= (isMeterProduct ? meterConfig.min : 1) ||
+                        busy
+                      }
                       aria-label="Decrease quantity"
                     >
                       −
                     </button>
 
-                    <span className="pc-qty-num">{quantity}</span>
+                    <span className="pc-qty-num">
+                      {isMeterProduct ? `${formatMeters(quantity)}m` : quantity}
+                    </span>
 
                     <button
                       type="button"
                       className="pc-qty-btn"
                       onClick={() => handleChangeQuantity("increase")}
+                      disabled={
+                        quantity >=
+                          (isMeterProduct
+                            ? meterConfig.max
+                            : selectedVariant?.stock > 0
+                              ? Math.min(100, selectedVariant.stock)
+                              : 100) ||
+                        busy
+                      }
                       aria-label="Increase quantity"
                     >
                       +
@@ -1406,6 +1536,17 @@ export default function FeaturedProducts() {
           border-color: ${COLORS.teal};
           color: #fff;
         }
+        .pc-meter-select {
+          min-width: 78px;
+          height: 28px;
+          padding: 0 8px;
+          border: 1px solid ${COLORS.teal};
+          border-radius: 7px;
+          background: ${COLORS.teal};
+          color: #fff;
+          font: 600 10.5px/1 var(--font-poppins), Arial, sans-serif;
+          cursor: pointer;
+        }
 
         /* ---------- actions ---------- */
         .pc-foot { margin-top: auto; padding-top: 16px; }
@@ -1623,6 +1764,7 @@ export default function FeaturedProducts() {
           .pc-swatches, .pc-sizes { gap: 6px; }
           .pc-color-dot { width: 17px; height: 17px; flex-basis: 17px; }
           .pc-size-btn { min-width: 28px; height: 23px; padding: 0 7px; font-size: 9px; border-radius: 6px; }
+          .pc-meter-select { height: 23px; min-width: 68px; padding: 0 6px; font-size: 9px; }
 
           .pc-foot { padding-top: 12px; }
           .pc-msg { font-size: 9px; }

@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 
 
 import { Loader, Eye, ShoppingBag, PackageCheck, Truck, IndianRupee } from "lucide-react";
+import { useSmartAutoRefresh } from "@/hooks/useAutoRefresh";
 
 
 
@@ -258,6 +259,17 @@ export default function OrdersPage() {
 
 
   }, [page, approvalPage, activeTab]);
+
+  // Auto-refresh orders every 10 seconds with proper dependencies
+  const refreshCallback = async () => {
+    if (activeTab === "orders") {
+      await fetchOrders();
+    } else if (activeTab === "approvals") {
+      await fetchApprovals();
+    }
+  };
+
+  useSmartAutoRefresh(refreshCallback, 10000);
 
 
 

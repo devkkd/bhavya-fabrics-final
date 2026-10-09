@@ -19,6 +19,7 @@ import {
 import { products as fallbackProducts } from "../data/product";
 import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
+import { requestCustomerLogin } from "@/utils/storefrontSync";
 
 const API_URL = (
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api"
@@ -1297,6 +1298,7 @@ export default function SalePage() {
       if (result?.loginRequired) {
         setBuyingProduct(null);
         setCardMessage(id, "Please login to buy now");
+        requestCustomerLogin(() => handleBuyNow(id));
         return;
       }
 

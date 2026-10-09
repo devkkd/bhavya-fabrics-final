@@ -24,6 +24,7 @@ import {
   MapPin,
   Package,
 } from "lucide-react";
+import { useSmartAutoRefresh } from "@/hooks/useAutoRefresh";
 
 /* =========================================================
    API
@@ -565,6 +566,9 @@ export default function AdminEnquiriesPage() {
         timer
       );
   }, [loadEnquiries]);
+
+  // Use smart auto-refresh instead of manual interval
+  useSmartAutoRefresh(() => loadEnquiries(false), 15000);
 
   /* =======================================================
      SUMMARY

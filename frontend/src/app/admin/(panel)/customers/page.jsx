@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useSmartAutoRefresh } from "@/hooks/useAutoRefresh";
 import Link from "next/link";
 import {
   Search,
@@ -139,6 +140,9 @@ export default function CustomersPage() {
   }, [page, search, statusFilter]);
 
   useEffect(() => { fetchCustomers(); }, [page, statusFilter]);
+
+  // Auto-refresh customers every 30 seconds
+  useSmartAutoRefresh(() => fetchCustomers({ page, search, status: statusFilter }), 30000);
 
   /* debounced search */
   function handleSearch(val) {

@@ -137,6 +137,12 @@ const subCategorySchema =
         ],
         default: "published",
         index: true
+      },
+
+      order: {
+        type: Number,
+        default: 0,
+        index: true
       }
     },
     {

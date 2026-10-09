@@ -27,7 +27,8 @@ import {
   CheckSquare,
   BookOpen,
   Star,
-  FileText
+  FileText,
+  Upload
 } from "lucide-react";
 
 const API_URL =
@@ -53,6 +54,11 @@ const navItems = [
     label: "Products",
     href: "/admin/products",
     icon: Package
+  },
+  {
+    label: "Bulk Upload",
+    href: "/admin/bulkUpload",
+    icon: Upload
   },
   {
     label: "Sale",
