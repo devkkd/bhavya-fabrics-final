@@ -50,6 +50,8 @@ const { startProductSaleExpiryWatcher } =
   require("./services/productSaleExpiryWatcher");
 
   const heroSettingsRoutes = require("./routes/heroSettings");
+const blogRoutes = require("./routes/blogs");
+const catalogueRoutes = require("./routes/catalogue");
 
 const app = express();
 
@@ -269,6 +271,10 @@ app.use(
   "/api/hero-settings",
   heroSettingsRoutes
 );
+
+app.use("/api/blogs", blogRoutes);
+app.use("/api/catalogue", catalogueRoutes);
+
 
 /*
 |--------------------------------------------------------------------------

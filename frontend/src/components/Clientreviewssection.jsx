@@ -1,43 +1,104 @@
 "use client";
 
-const testimonials = [
+import { useEffect, useState } from "react";
+
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api").replace(/\/$/, "");
+
+// Frontend fallback is used if the API is offline or returns no usable reviews.
+const FALLBACK_TESTIMONIALS = [
   {
     quote:
       "Bhavya Fabrics has been our primary supplier for three seasons. The consistency in GSM, color, and finish is exceptional. Truly export-grade quality at wholesale pricing.",
     name: "Priya Mehta",
     role: "Owner, Studio Drape – Mumbai",
+    rating: 5,
   },
   {
     quote:
       "We source Ajrakh and block print fabrics from Bhavya for our Middle Eastern clientele. The packaging, documentation, and delivery timelines meet international standards.",
     name: "Amir Al-Rashid",
     role: "Procurement Director, Dubai Fashion House",
+    rating: 5,
   },
   {
     quote:
       "Their mulmul and cotton cambric quality is unmatched in Rajasthan. The MOQ flexibility and custom printing capability make them our go-to manufacturer.",
     name: "Sunita Kapoor",
     role: "CEO, Kapoor Garment Exports – Jaipur",
+    rating: 5,
   },
 ];
 
-function StarRating() {
+function StarRating({ rating = 5 }) {
+  const safeRating = Math.max(1, Math.min(5, Number(rating) || 5));
   return (
-    <div className="review-stars" aria-label="5 star rating">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <span
-          key={i}
-          aria-hidden="true"
-          className="review-star"
-        >
-          &#9733;
-        </span>
+    <div className="review-stars" aria-label={`${safeRating} out of 5 stars`}>
+      {Array.from({ length: safeRating }).map((_, i) => (
+        <span key={i} aria-hidden="true" className="review-star">&#9733;</span>
       ))}
     </div>
   );
 }
 
+function normalizeReview(review, index) {
+  return {
+    id: String(review?._id || review?.id || `review-${index}`),
+    quote: String(review?.quote || review?.review || "").trim(),
+    name: String(review?.name || review?.customerName || "Client").trim(),
+    role: String(review?.role || review?.company || "").trim(),
+    rating: Math.max(1, Math.min(5, Number(review?.rating) || 5)),
+  };
+}
+
 export default function ClientReviewsSection() {
+  const [reviews, setReviews] = useState(FALLBACK_TESTIMONIALS.map(normalizeReview));
+
+  useEffect(() => {
+    let isMounted = true;
+    const controller = new AbortController();
+
+    async function loadReviews() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/reviews`, {
+          method: "GET",
+          headers: { Accept: "application/json" },
+          credentials: "include",
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) return;
+
+        const payload = await response.json();
+        const rows = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.data)
+            ? payload.data
+            : Array.isArray(payload?.reviews)
+              ? payload.reviews
+              : [];
+
+        const usableReviews = rows
+          .filter((review) => review && (review.quote || review.review) && (review.name || review.customerName))
+          .map(normalizeReview)
+          .filter((review) => review.quote && review.name);
+
+        // Do not replace fallback data with an empty or malformed API response.
+        if (isMounted && usableReviews.length > 0) setReviews(usableReviews);
+      } catch (error) {
+        // Intentionally keep frontend reviews when the backend is unreachable.
+        if (error?.name !== "AbortError") {
+          console.warn("Reviews API unavailable; showing frontend fallback reviews.");
+        }
+      }
+    }
+
+    loadReviews();
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
+  }, []);
+
   return (
     <section
       className="reviews-section"
@@ -466,12 +527,12 @@ export default function ClientReviewsSection() {
         ===================================================== */}
 
         <div className="reviews-grid">
-          {testimonials.map((testimonial) => (
+          {reviews.map((testimonial) => (
             <div
-              key={testimonial.name}
+              key={testimonial.id || testimonial.name}
               className="review-card"
             >
-              <StarRating />
+              <StarRating rating={testimonial.rating} />
 
               <p className="review-quote">
                 &quot;

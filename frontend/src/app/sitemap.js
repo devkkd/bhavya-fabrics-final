@@ -1,0 +1,3 @@
+const API=(process.env.NEXT_PUBLIC_API_URL||"http://localhost:5001/api").replace(/\/$/,"");
+const SITE=(process.env.NEXT_PUBLIC_SITE_URL||"https://bhavyafabrics.com").replace(/\/$/,"");
+export default async function sitemap(){let blogs=[];try{const r=await fetch(`${API}/blogs/sitemap`,{cache:"no-store"});const p=await r.json();blogs=p?.data||[]}catch{}const staticPages=["","/about","/contact","/products","/blog","/privacy-policy","/terms-of-use"];return [...staticPages.map(path=>({url:`${SITE}${path}`,lastModified:new Date(),changeFrequency:path==="/"?"weekly":"monthly",priority:path==="/"?1:path==="/blog" ? 0.8 : 0.6})),...blogs.map(b=>({url:`${SITE}/blog/${b.slug}`,lastModified:b.updatedAt?new Date(b.updatedAt):new Date(),changeFrequency:"monthly",priority:.7}))]}

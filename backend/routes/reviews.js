@@ -1,0 +1,10 @@
+const express = require('express');
+const adminAuth = require('../middleware/adminAuth');
+const Review = require('../models/Review');
+const router = express.Router();
+router.get('/', async (req, res, next) => { try { const data = await Review.find({ isPublished: true }).sort({ sortOrder: 1, createdAt: -1 }).limit(30); res.json({ success: true, data }); } catch(e) { next(e); } });
+router.get('/admin', adminAuth, async (req, res, next) => { try { res.json({ success: true, data: await Review.find().sort({ sortOrder: 1, createdAt: -1 }) }); } catch(e) { next(e); } });
+router.post('/', adminAuth, async (req, res, next) => { try { const data = await Review.create(req.body); res.status(201).json({ success: true, data }); } catch(e) { next(e); } });
+router.put('/:id', adminAuth, async (req, res, next) => { try { const data = await Review.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true }); if (!data) return res.status(404).json({ success: false, message: 'Review not found' }); res.json({ success: true, data }); } catch(e) { next(e); } });
+router.delete('/:id', adminAuth, async (req, res, next) => { try { await Review.findByIdAndDelete(req.params.id); res.json({ success: true }); } catch(e) { next(e); } });
+module.exports = router;

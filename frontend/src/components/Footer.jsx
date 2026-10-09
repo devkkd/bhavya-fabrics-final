@@ -14,9 +14,9 @@ const LOGO_IMAGE_SRC = "/images/logo.png";
 
 const QUICK_LINKS = [
 
-  { label: "Home", href: "/" },
+  { label: "Blog", href: "/blog" },
 
-  { label: "New Arrivals", href: "/new-arrivals" },
+  { label: "New Arrivals", href: "/newArrivals" },
 
   { label: "Collections", href: "/collection" },
 

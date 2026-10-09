@@ -24,7 +24,10 @@ import {
   ChevronRight,
   UserRound,
   ImageIcon,
-  CheckSquare
+  CheckSquare,
+  BookOpen,
+  Star,
+  FileText
 } from "lucide-react";
 
 const API_URL =
@@ -71,6 +74,9 @@ const navItems = [
     href: "/admin/orders",
     icon: ShoppingBag
   },
+  { label: "Catalogue", href: "/admin/catalogue", icon: FileText },
+  { label: "Reviews", href: "/admin/reviews", icon: Star },
+  { label: "Blogs", href: "/admin/blogs", icon: BookOpen },
   {
     label: "Requests",
     href: "/admin/requests",
