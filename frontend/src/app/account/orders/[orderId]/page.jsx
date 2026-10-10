@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 import Link from "next/link";
+import { StorefrontPrice } from "@/context/StorefrontPreferencesContext";
 
 import { ArrowLeft, Loader, CheckCircle, AlertCircle, Truck, Package } from "lucide-react";
 
@@ -844,7 +845,7 @@ export default function OrderDetailsPage() {
 
                       <div style={{ fontSize: "14px", color: "#696968", marginBottom: "8px" }}>
 
-                        Qty: {item.quantity} × ₹{Number(item.price || 0).toLocaleString("en-IN")}
+                        Qty: {item.quantity} × <StorefrontPrice amount={item.price} />
 
                       </div>
 
@@ -858,7 +859,7 @@ export default function OrderDetailsPage() {
 
                       <div style={{ fontWeight: "700", color: "#295C65" }}>
 
-                        ₹{item.total.toLocaleString("en-IN")}
+                        <StorefrontPrice amount={item.total} />
 
                       </div>
 
@@ -970,7 +971,7 @@ export default function OrderDetailsPage() {
 
                   <span>Subtotal</span>
 
-                  <span>₹{order.pricing.subtotal.toLocaleString("en-IN")}</span>
+                  <span><StorefrontPrice amount={order.pricing.subtotal} /></span>
 
                 </div>
 
@@ -978,7 +979,7 @@ export default function OrderDetailsPage() {
 
                   <span>Shipping</span>
 
-                  <span>₹{order.pricing.shippingCharges}</span>
+                  <span><StorefrontPrice amount={order.pricing.shippingCharges} /></span>
 
                 </div>
 
@@ -986,7 +987,7 @@ export default function OrderDetailsPage() {
 
                   <span>Tax</span>
 
-                  <span>₹{order.pricing.taxAmount}</span>
+                  <span><StorefrontPrice amount={order.pricing.taxAmount} /></span>
 
                 </div>
 
@@ -1014,7 +1015,7 @@ export default function OrderDetailsPage() {
 
                   <span>Total</span>
 
-                  <span style={{ color: "#BE9D6B" }}>₹{order.pricing.total.toLocaleString("en-IN")}</span>
+                  <span style={{ color: "#BE9D6B" }}><StorefrontPrice amount={order.pricing.total} /></span>
 
                 </div>
 

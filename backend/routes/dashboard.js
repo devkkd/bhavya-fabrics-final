@@ -12,6 +12,7 @@ const Blog = require("../models/Blog");
 const Catalogue = require("../models/Catalogue");
 const SaleNotifySubscriber = require("../models/SaleNotifySubscriber");
 const HeroSetting = require("../models/HeroSetting");
+const Exhibition = require("../models/Exhibition");
 
 const router = express.Router();
 
@@ -33,6 +34,8 @@ router.get("/admin/summary", adminAuth, async (req, res) => {
       paidRevenueResult,
       recentOrders,
       recentEnquiries,
+      exhibitions,
+      recentExhibitions,
       heroSettings,
     ] = await Promise.all([
       Product.countDocuments({}),
@@ -61,8 +64,25 @@ router.get("/admin/summary", adminAuth, async (req, res) => {
         .limit(6)
         .select("name email phone fabric status requestType createdAt")
         .lean(),
+      Exhibition.countDocuments({}),
+      Exhibition.find({})
+        .sort({ startDate: -1 })
+        .limit(5)
+        .select("title location startDate endDate")
+        .lean(),
       HeroSetting.countDocuments({}),
     ]);
+
+    const now = new Date();
+    const currentExhibitions = recentExhibitions.map((exhibition) => {
+      let status = "past";
+      if (new Date(exhibition.startDate) > now) {
+        status = "upcoming";
+      } else if (new Date(exhibition.endDate) >= now) {
+        status = "ongoing";
+      }
+      return { ...exhibition, status };
+    });
 
     return res.status(200).json({
       success: true,
@@ -80,11 +100,13 @@ router.get("/admin/summary", adminAuth, async (req, res) => {
           saleSubscribers,
           pendingOrders,
           pendingEnquiries,
+          exhibitions,
           revenue: Number(paidRevenueResult?.[0]?.total || 0),
           heroSettings,
         },
         recentOrders,
         recentEnquiries,
+        recentExhibitions: currentExhibitions,
         generatedAt: new Date().toISOString(),
       },
     });

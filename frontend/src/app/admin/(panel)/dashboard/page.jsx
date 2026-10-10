@@ -1,19 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useSmartAutoRefresh } from "@/hooks/useAutoRefresh";
+import { useCallback, useState } from "react";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import Link from "next/link";
 import {
   Package, ShoppingBag, MessageSquare, IndianRupee, Users, Tags,
   Layers3, Star, BookOpen, FileText, Bell, Image as ImageIcon,
-  RefreshCw, AlertCircle, CheckCircle2, ArrowUpRight, Clock3, Upload
+  RefreshCw, AlertCircle, CheckCircle2, ArrowUpRight, Clock3, Upload, Ticket
 } from "lucide-react";
 
 const API = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api").replace(/\/+$/, "");
 
 const navItems = [
   { title: "Products", href: "/admin/products", icon: Package, key: "products", desc: "Manage product listings" },
-  { title: "Bulk Upload", href: "/admin/bulkUpload", icon: Upload, key: "bulkUpload", desc: "Import multiple products" },
+  { title: "Bulk Upload", href: "/admin/bulkUpload", icon: Upload, desc: "Import multiple products" },
   { title: "Categories", href: "/admin/categories", icon: Tags, key: "categories", desc: "Categories and collections" },
   { title: "Customers", href: "/admin/customers", icon: Users, key: "customers", desc: "Customer accounts" },
   { title: "Orders", href: "/admin/orders", icon: ShoppingBag, key: "orders", desc: "Review and fulfil orders" },
@@ -22,6 +22,7 @@ const navItems = [
   { title: "Reviews", href: "/admin/reviews", icon: Star, key: "reviews", desc: "Customer reviews" },
   { title: "Blogs", href: "/admin/blogs", icon: BookOpen, key: "blogs", desc: "Articles and SEO content" },
   { title: "Catalogue", href: "/admin/catalogue", icon: FileText, key: "catalogues", desc: "PDF catalogue management" },
+  { title: "Exhibitions", href: "/admin/exhibitions", icon: Ticket, key: "exhibitions", desc: "Manage exhibitions" },
   { title: "Hero Settings", href: "/admin/hero", icon: ImageIcon, key: "heroSettings", desc: "Homepage hero content" },
   { title: "Sale", href: "/admin/sale", icon: Bell, key: "saleSubscribers", desc: "Sale and subscriber settings" },
 ];
@@ -68,14 +69,7 @@ export default function DashboardPage() {
     }
   }, []);
 
-  useEffect(() => {
-    load(true);
-    const timer = setInterval(() => load(false), 60000);
-    return () => clearInterval(timer);
-  }, [load]);
-
-  // Use smart auto-refresh for dashboard
-  useSmartAutoRefresh(() => load(false), 60000);
+  useAutoRefresh(() => load(false), 60000);
 
   const stats = data?.stats || {};
   const styles = {
@@ -152,7 +146,7 @@ export default function DashboardPage() {
             return <Link key={item.href} href={item.href} style={styles.link}>
               <span style={styles.linkIcon}><Icon size={18} /></span>
               <span style={{ minWidth: 0 }}><p style={styles.linkTitle}>{item.title}</p><p style={styles.linkDesc}>{item.desc}</p></span>
-              <span style={styles.count}>{loading && !data ? "—" : fmt(stats[item.key])}</span>
+              {item.key && <span style={styles.count}>{loading && !data ? "—" : fmt(stats[item.key])}</span>}
               <ArrowUpRight size={14} color="#9B8551" />
             </Link>;
           })}
@@ -176,6 +170,16 @@ export default function DashboardPage() {
           <tbody>{(data?.recentEnquiries || []).length ? data.recentEnquiries.map((e) => <tr key={e._id}>
             <td style={styles.td}>{e.name || "—"}</td><td style={styles.td}>{e.email || e.phone || "—"}</td><td style={styles.td}>{e.requestType || e.fabric || "Enquiry"}</td><td style={styles.td}><span style={styles.status}>{e.status || "new"}</span></td><td style={styles.td}>{showDate(e.createdAt)}</td>
           </tr>) : <tr><td colSpan={5} style={styles.empty}>{loading ? "Loading recent enquiries…" : "No enquiries found yet."}</td></tr>}</tbody>
+        </table></div></div>
+      </section>
+
+      <section style={styles.section}>
+        <div className={styles.sectionHead}><h2 style={styles.sectionTitle}>Recent exhibitions</h2><Link href="/admin/exhibitions" style={{ color: "#295C65", fontSize: 11, fontWeight: 800, textDecoration: "none" }}>Manage exhibitions</Link></div>
+        <div style={styles.panel}><div style={styles.tableWrap}><table style={styles.table}>
+          <thead><tr><th style={styles.th}>Exhibition</th><th style={styles.th}>Location</th><th style={styles.th}>Status</th><th style={styles.th}>Dates</th></tr></thead>
+          <tbody>{(data?.recentExhibitions || []).length ? data.recentExhibitions.map((exhibition) => <tr key={exhibition._id}>
+            <td style={styles.td}>{exhibition.title || "—"}</td><td style={styles.td}>{exhibition.location || "—"}</td><td style={styles.td}><span style={styles.status}>{exhibition.status || "—"}</span></td><td style={styles.td}>{showDate(exhibition.startDate)} - {showDate(exhibition.endDate)}</td>
+          </tr>) : <tr><td colSpan={4} style={styles.empty}>{loading ? "Loading exhibitions…" : "No exhibitions found yet."}</td></tr>}</tbody>
         </table></div></div>
       </section>
 

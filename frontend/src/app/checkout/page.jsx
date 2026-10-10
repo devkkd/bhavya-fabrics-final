@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 
 import { useCart } from "@/context/CartContext";
+import { useStorefrontPreferences } from "@/context/StorefrontPreferencesContext";
 
 
 
@@ -302,18 +303,6 @@ function getItemImage(item) {
 
 
 
-function formatINR(value) {
-
-  return Number(value || 0).toLocaleString(
-
-    "en-IN"
-
-  );
-
-}
-
-
-
 export default function CheckoutPage() {
   return (
     <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><p>Loading...</p></div>}>
@@ -325,6 +314,7 @@ export default function CheckoutPage() {
 function CheckoutPageContent() {
 
   const router = useRouter();
+  const { formatPrice } = useStorefrontPreferences();
 
   const searchParams = useSearchParams();
 
@@ -3414,13 +3404,7 @@ const {
 
                   <div className="shipping-price">
 
-                    ₹
-
-                    {formatINR(
-
-                      shippingQuotes?.standard ?? 0
-
-                    )}
+                    {formatPrice(shippingQuotes?.standard ?? 0)}
 
                   </div>
 
@@ -3492,13 +3476,7 @@ const {
 
                   <div className="shipping-price">
 
-                    ₹
-
-                    {formatINR(
-
-                      shippingQuotes?.express ?? 0
-
-                    )}
+                    {formatPrice(shippingQuotes?.express ?? 0)}
 
                   </div>
 
@@ -3684,15 +3662,7 @@ const {
 
                           <div className="summary-item-total">
 
-                            ₹
-
-                            {formatINR(
-
-                              price *
-
-                                quantity
-
-                            )}
+                            {formatPrice(price * quantity)}
 
                           </div>
 
@@ -3830,13 +3800,7 @@ const {
 
               <span>
 
-                ₹
-
-                {formatINR(
-
-                  subtotal
-
-                )}
+                {formatPrice(subtotal)}
 
               </span>
 
@@ -3856,13 +3820,7 @@ const {
 
               <span>
 
-                ₹
-
-                {formatINR(
-
-                  shippingCharges
-
-                )}
+                {formatPrice(shippingCharges)}
 
               </span>
 
@@ -3882,9 +3840,7 @@ const {
 
               <span>
 
-                ₹
-
-                {formatINR(tax)}
+                {formatPrice(tax)}
 
               </span>
 
@@ -3904,13 +3860,7 @@ const {
 
               <span>
 
-                ₹
-
-                {formatINR(
-
-                  total
-
-                )}
+                {formatPrice(total)}
 
               </span>
 
@@ -3970,6 +3920,9 @@ const {
 
               created.
 
+            </p>
+            <p className="payment-note">
+              Prices are shown as an approximate conversion from INR. Your payment will be charged in INR.
             </p>
 
           </aside>

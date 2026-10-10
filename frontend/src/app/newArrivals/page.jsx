@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import Link from "next/link";
+import { StorefrontPrice } from "@/context/StorefrontPreferencesContext";
 
 import {
 
@@ -2813,7 +2814,7 @@ export default function NewArrivalsPage() {
 
                           <span className="arrival-sale-price">
 
-                            ₹{Number(displayPricing.final).toLocaleString("en-IN")}
+                            <StorefrontPrice amount={Number(displayPricing.final)} />
 
                           </span>
 
@@ -2823,7 +2824,7 @@ export default function NewArrivalsPage() {
 
                             <span className="arrival-mrp">
 
-                              ₹{Number(displayPricing.regular).toLocaleString("en-IN")}
+                              <StorefrontPrice amount={Number(displayPricing.regular)} />
 
                             </span>
 

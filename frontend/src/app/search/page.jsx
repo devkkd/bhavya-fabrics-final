@@ -13,6 +13,7 @@ import {
 
 import { useCart } from "@/context/CartContext";
 import CustomerLoginModal from "@/components/CustomerLoginModal";
+import { StorefrontPrice } from "@/context/StorefrontPreferencesContext";
 
 const API_URL = (
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api"
@@ -766,15 +767,15 @@ function ProductCard({ product, onLoginRequired }) {
           {hasSale ? (
             <>
               <span className="sr-price-old">
-                ₹{displayRegularPrice.toLocaleString("en-IN")}
+                <StorefrontPrice amount={displayRegularPrice} />
               </span>
               <span className="sr-price-new">
-                ₹{displaySalePrice.toLocaleString("en-IN")}
+                <StorefrontPrice amount={displaySalePrice} />
               </span>
             </>
           ) : (
             <span className="sr-price-new">
-              ₹{displayRegularPrice.toLocaleString("en-IN")}
+              <StorefrontPrice amount={displayRegularPrice} />
             </span>
           )}
         </div>

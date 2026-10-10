@@ -8,6 +8,7 @@ import Link from "next/link";
 
 import { useRouter } from "next/navigation";
 import { notifyCustomerAuthChanged } from "@/utils/storefrontSync";
+import { StorefrontPrice } from "@/context/StorefrontPreferencesContext";
 
 import {
 
@@ -98,16 +99,6 @@ const STATUS_LABELS = {
   returned: "Returned",
 
 };
-
-
-
-function money(value) {
-
-  const amount = Number(value || 0);
-
-  return `₹${amount.toLocaleString("en-IN")}`;
-
-}
 
 
 
@@ -1775,7 +1766,7 @@ export default function OrdersListPage() {
 
                         <div className="order-meta-value" style={{ fontWeight: 600 }}>
 
-                          {money(order?.pricing?.total)}
+                          <StorefrontPrice amount={order?.pricing?.total} />
 
                         </div>
 

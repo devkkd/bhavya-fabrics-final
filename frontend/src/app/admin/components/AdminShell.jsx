@@ -17,7 +17,7 @@ import {
   Tags,
   MessageSquare,
   ShoppingBag,
-    BadgePercent,
+  BadgePercent,
   LogOut,
   Menu,
   X,
@@ -28,7 +28,8 @@ import {
   BookOpen,
   Star,
   FileText,
-  Upload
+  Upload,
+  Ticket
 } from "lucide-react";
 
 const API_URL =
@@ -59,6 +60,11 @@ const navItems = [
     label: "Bulk Upload",
     href: "/admin/bulkUpload",
     icon: Upload
+  },
+  {
+    label: "Exhibitions",
+    href: "/admin/exhibitions",
+    icon: Ticket
   },
   {
     label: "Sale",

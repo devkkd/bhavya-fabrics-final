@@ -8,6 +8,7 @@ import JoinSection  from "@/components/Joinsection";
 
 import { CartProvider,     useCart     } from "@/context/CartContext";
 import { WishlistProvider, useWishlist } from "@/context/WishlistContext";
+import { StorefrontPreferencesProvider } from "@/context/StorefrontPreferencesContext";
 
 /* Inner shell reads counts from context and passes them to Header */
 function ShellInner({ children }) {
@@ -33,11 +34,26 @@ function ShellInner({ children }) {
 }
 
 export default function SiteShell({ children }) {
-  return (
-    <CartProvider>
-      <WishlistProvider>
-        <ShellInner>{children}</ShellInner>
-      </WishlistProvider>
-    </CartProvider>
+  const isAdminRoute = usePathname()?.startsWith("/admin");
+  const site = (
+    <StorefrontPreferencesProvider>
+      <CartProvider>
+        <WishlistProvider>
+          <ShellInner>{children}</ShellInner>
+        </WishlistProvider>
+      </CartProvider>
+    </StorefrontPreferencesProvider>
   );
+
+  if (isAdminRoute) {
+    return (
+      <CartProvider>
+        <WishlistProvider>
+          <ShellInner>{children}</ShellInner>
+        </WishlistProvider>
+      </CartProvider>
+    );
+  }
+
+  return site;
 }

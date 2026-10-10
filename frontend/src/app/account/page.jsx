@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { notifyCustomerAuthChanged } from "@/utils/storefrontSync";
+import { StorefrontPrice } from "@/context/StorefrontPreferencesContext";
 
 import CustomerLoginModal from "../../components/CustomerLoginModal";
 
@@ -3297,11 +3298,7 @@ if (!customer) {
                                   1
                                     ? "item"
                                     : "items"}{" "}
-                                  • ₹
-                                  {
-                                    order.pricing
-                                      ?.total
-                                  }
+                                  • <StorefrontPrice amount={order.pricing?.total} />
                                 </span>
 
                                 <span className="order-meta">
@@ -3525,11 +3522,7 @@ if (!customer) {
                                 1
                                   ? "item"
                                   : "items"}{" "}
-                                • ₹
-                                {
-                                  order.pricing
-                                    ?.total
-                                }
+                                • <StorefrontPrice amount={order.pricing?.total} />
                               </span>
 
                               <span

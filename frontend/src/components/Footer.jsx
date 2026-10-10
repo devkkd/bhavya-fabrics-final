@@ -26,6 +26,8 @@ const QUICK_LINKS = [
 
   { label: "Contact", href: "/contact" },
 
+  { label: "Exhibitions", href: "/exhibitions" },
+
 ];
 
 

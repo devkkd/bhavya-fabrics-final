@@ -17,6 +17,7 @@ import {
 
 
 import { useCart } from "@/context/CartContext";
+import { StorefrontPrice } from "@/context/StorefrontPreferencesContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { requestCustomerLogin } from "@/utils/storefrontSync";
 
@@ -2534,22 +2535,12 @@ export default function SellingModeCatalog({
                       <div className="selling-price-area">
                         <div className="selling-price-line">
                           <span className="selling-final-price">
-                            ₹
-                            {Number(
-                              pricing.final || 0
-                            ).toLocaleString(
-                              "en-IN"
-                            )}
+                            <StorefrontPrice amount={Number(pricing.final || 0)} />
                           </span>
 
                           {pricing.isSale ? (
                             <span className="selling-original-price">
-                              ₹
-                              {Number(
-                                pricing.regular
-                              ).toLocaleString(
-                                "en-IN"
-                              )}
+                              <StorefrontPrice amount={Number(pricing.regular)} />
                             </span>
                           ) : null}
 

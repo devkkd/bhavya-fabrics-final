@@ -56,6 +56,7 @@ const reviewRoutes = require("./routes/reviews");
 const dashboardRoutes = require("./routes/dashboard");
 const templateRoutes = require("./routes/templates");
 const bulkUploadRoutes = require("./routes/bulkUpload");
+const exhibitionRoutes = require("./routes/exhibitions");
 
 const app = express();
 
@@ -279,6 +280,7 @@ app.use("/api/reviews", reviewRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/templates", templateRoutes);
 app.use("/api/bulk-upload", bulkUploadRoutes);
+app.use("/api/exhibitions", exhibitionRoutes);
 
 app.use("/api/blogs", blogRoutes);
 app.use("/api/catalogue", catalogueRoutes);

@@ -16,6 +16,7 @@ import {
 
 import { useWishlist } from "@/context/WishlistContext";
 import { useCart } from "@/context/CartContext";
+import { StorefrontPrice } from "@/context/StorefrontPreferencesContext";
 
 const API_URL = (
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api"
@@ -372,10 +373,6 @@ function cartItemMatches(
     cartColor.toLowerCase() === String(selectedColor || "").toLowerCase() &&
     cartSize.toLowerCase() === String(selectedSize || "").toLowerCase()
   );
-}
-
-function priceText(value) {
-  return `₹${Number(value || 0).toLocaleString("en-IN")}`;
 }
 
 function getDiscountPercent(regularPrice, salePrice) {
@@ -820,7 +817,7 @@ function WishlistProductCard({ wishlistItem, product, onRemoveSaved }) {
         </span>
 
         <span className="wishlist-price-pill">
-          {priceText(selectedPrice)}
+          <StorefrontPrice amount={selectedPrice} />
         </span>
         <button
           type="button"
@@ -851,10 +848,10 @@ function WishlistProductCard({ wishlistItem, product, onRemoveSaved }) {
           {selectedHasSale ? (
             <>
               <span className="wishlist-sale-price">
-                {priceText(selectedSalePrice)}
+                <StorefrontPrice amount={selectedSalePrice} />
               </span>
               <span className="wishlist-old-price">
-                {priceText(selectedRegularPrice)}
+                <StorefrontPrice amount={selectedRegularPrice} />
               </span>
               <span className="wishlist-off-text">
                 {discountPercent}% OFF
@@ -862,7 +859,7 @@ function WishlistProductCard({ wishlistItem, product, onRemoveSaved }) {
             </>
           ) : (
             <span className="wishlist-sale-price">
-              {priceText(selectedPrice)}
+              <StorefrontPrice amount={selectedPrice} />
             </span>
           )}
         </div>

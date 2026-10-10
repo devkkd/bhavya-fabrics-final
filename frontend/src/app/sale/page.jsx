@@ -20,6 +20,7 @@ import { products as fallbackProducts } from "../data/product";
 import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
 import { requestCustomerLogin } from "@/utils/storefrontSync";
+import { StorefrontPrice } from "@/context/StorefrontPreferencesContext";
 
 const API_URL = (
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api"
@@ -349,14 +350,6 @@ function extractProducts(payload) {
 
 function normalizeHeroImage(value) {
   return normalizeImageValue(value);
-}
-
-/* =========================================================
-   HELPERS
-========================================================= */
-
-function formatNumber(value) {
-  return new Intl.NumberFormat("en-IN").format(value);
 }
 
 /* =========================================================
@@ -3220,12 +3213,12 @@ export default function SalePage() {
                         {/* ---------- PRICE ---------- */}
                         <div className="sale-price-row">
                           <span className="sale-new-price">
-                            ₹{formatNumber(displayPricing.sale)}
+                            <StorefrontPrice amount={displayPricing.sale} />
                           </span>
 
                           {displayPricing.original > displayPricing.sale ? (
                             <span className="sale-old-price">
-                              ₹{formatNumber(displayPricing.original)}
+                              <StorefrontPrice amount={displayPricing.original} />
                             </span>
                           ) : null}
 

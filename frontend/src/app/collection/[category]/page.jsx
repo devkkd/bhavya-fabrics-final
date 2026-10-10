@@ -38,6 +38,7 @@ import {
 
 import { useCart }     from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
+import { StorefrontPrice } from "@/context/StorefrontPreferencesContext";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -6130,22 +6131,12 @@ function CollectionPageContent() {
                             return (
                               <div className="product-price-row">
                                 <span className="product-sale-price">
-                                  ₹
-                                  {new Intl.NumberFormat(
-                                    "en-IN"
-                                  ).format(
-                                    pricing.finalPrice
-                                  )}
+                                  <StorefrontPrice amount={pricing.finalPrice} />
                                 </span>
 
                                 {pricing.hasSale ? (
                                   <span className="product-actual-price">
-                                    ₹
-                                    {new Intl.NumberFormat(
-                                      "en-IN"
-                                    ).format(
-                                      pricing.regularPrice
-                                    )}
+                                    <StorefrontPrice amount={pricing.regularPrice} />
                                   </span>
                                 ) : null}
 

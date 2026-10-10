@@ -315,9 +315,76 @@ const getDeliveryUrl =
     );
   };
 
+/*
+|--------------------------------------------------------------------------
+| Upload to Cloudflare (Buffer Upload)
+|--------------------------------------------------------------------------
+*/
+
+const uploadToCloudflare = async (buffer, filename) => {
+  const { accountId, apiToken } = getCloudflareConfig();
+
+  if (!buffer) {
+    throw new Error("Buffer is required for upload");
+  }
+
+  try {
+    // Use fetch with blob/stream for Node.js 18+
+    const response = await fetch(
+      `${CLOUDFLARE_API_BASE}/accounts/${accountId}/images/v1`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiToken}`,
+        },
+        body: buffer,
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      const message = data?.errors
+        ?.map((error) => error.message)
+        ?.join(", ");
+
+      throw new Error(
+        message || "Failed to upload to Cloudflare"
+      );
+    }
+
+    const imageId = data?.result?.id;
+    const url = getDeliveryUrl(imageId);
+
+    if (!imageId) {
+      throw new Error("Cloudflare returned invalid upload response");
+    }
+
+    return {
+      imageId,
+      url,
+    };
+  } catch (error) {
+    console.error("Cloudflare upload error:", error);
+    throw error;
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| Delete from Cloudflare
+|--------------------------------------------------------------------------
+*/
+
+const deleteFromCloudflare = async (imageId) => {
+  return deleteImage(imageId);
+};
+
 module.exports = {
   createDirectUpload,
   getImageDetails,
   deleteImage,
-  getDeliveryUrl
+  getDeliveryUrl,
+  uploadToCloudflare,
+  deleteFromCloudflare
 };

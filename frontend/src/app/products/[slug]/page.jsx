@@ -21,6 +21,10 @@ import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
 import CartStatusButton from "@/components/CartStatusButton";
 import { requestCustomerLogin } from "@/utils/storefrontSync";
+import {
+  StorefrontPrice,
+  useStorefrontPreferences,
+} from "@/context/StorefrontPreferencesContext";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api";
@@ -2945,17 +2949,11 @@ function SyncedRelatedProductCard({
         <div className="pd-related-price-row">
           {hasSale && (
             <span className="pd-related-old-price">
-              ₹
-              {regularPrice.toLocaleString(
-                "en-IN"
-              )}
+              <StorefrontPrice amount={regularPrice} />
             </span>
           )}
           <span className="pd-related-new-price">
-            ₹
-            {finalPrice.toLocaleString(
-              "en-IN"
-            )}
+            <StorefrontPrice amount={finalPrice} />
           </span>
         </div>
 
@@ -3205,6 +3203,7 @@ export default function ProductDetailPage() {
   const params = useParams();
 
   const router = useRouter();
+  const { formatPrice } = useStorefrontPreferences();
 
   const {
     addToCart,
@@ -4809,7 +4808,7 @@ export default function ProductDetailPage() {
             <div className="pd-price-row">
 
               <span className="pd-price">
-                ₹{Number(selectedPrice || 0).toLocaleString("en-IN")}
+                {formatPrice(selectedPrice)}
               </span>
               <span style={{ fontSize: 12, color: "#777", marginLeft: 6 }}>
                 {unitPriceLabel}
@@ -4824,7 +4823,7 @@ export default function ProductDetailPage() {
                       textDecoration: "line-through",
                     }}
                   >
-                    ₹{regularDisplayPrice}
+                    {formatPrice(regularDisplayPrice)}
                   </span>
 
                   <span
@@ -5243,8 +5242,8 @@ export default function ProductDetailPage() {
 
               <div style={{ marginTop: 10, fontSize: 13, color: "#555" }}>
                 {isMeterProduct
-                  ? `${quantity}m × ₹${Number(selectedPrice || 0).toLocaleString("en-IN")}/m = ₹${calculatedProductTotal.toLocaleString("en-IN")}`
-                  : `${quantity} × ₹${Number(selectedPrice || 0).toLocaleString("en-IN")} = ₹${calculatedProductTotal.toLocaleString("en-IN")}`}
+                  ? `${quantity}m × ${formatPrice(selectedPrice)}/m = ${formatPrice(calculatedProductTotal)}`
+                  : `${quantity} × ${formatPrice(selectedPrice)} = ${formatPrice(calculatedProductTotal)}`}
               </div>
 
               {isMeterProduct && quantity >= meterMax && (
@@ -5483,7 +5482,7 @@ export default function ProductDetailPage() {
                         <strong>
                           Shipping:
                         </strong>{" "}
-                        ₹{selectedSizeData.shippingCharge}
+                        {formatPrice(selectedSizeData.shippingCharge)}
                       </li>
                     ) : null}
                   </>
@@ -5502,7 +5501,7 @@ export default function ProductDetailPage() {
                         <strong>
                           Shipping:
                         </strong>{" "}
-                        ₹{selectedSizeData.shippingCharge}
+                        {formatPrice(selectedSizeData.shippingCharge)}
                       </li>
                     ) : null}
                   </>
@@ -5519,7 +5518,7 @@ export default function ProductDetailPage() {
                   <strong>
                     Price:
                   </strong>{" "}
-                  ₹{selectedPrice}{" "}
+                  {formatPrice(selectedPrice)}{" "}
                   ({product.priceUnit})
                 </li> 
 

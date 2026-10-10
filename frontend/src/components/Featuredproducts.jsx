@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Poppins, Cormorant_Garamond } from "next/font/google";
 import { useCart } from "@/context/CartContext";
+import { StorefrontPrice } from "@/context/StorefrontPreferencesContext";
 
 /* =========================================================
    FONTS
@@ -58,7 +59,7 @@ const FALLBACK_PRODUCTS = [
   {
     id: "p1",
     title: "Premium Cotton Cambric",
-    price: "₹180",
+    price: 180,
     image: "/images/home/products/1.png",
     hoverImage: "/images/home/products/2.png",
     colors: ["#F1EDE4", "#295C65", "#BE9D6B", "#C97A3D", "#1B1B1B"],
@@ -66,7 +67,7 @@ const FALLBACK_PRODUCTS = [
   {
     id: "p2",
     title: "Ajrakh Block Print",
-    price: "₹320",
+    price: 320,
     image: "/images/home/products/3.png",
     hoverImage: "/images/home/products/4.png",
     colors: ["#2D3142", "#8A4B32", "#C6A15B", "#F1EDE4", "#295C65"],
@@ -74,7 +75,7 @@ const FALLBACK_PRODUCTS = [
   {
     id: "p3",
     title: "Premium Linen",
-    price: "₹450",
+    price: 450,
     image: "/images/home/products/5.png",
     hoverImage: "/images/home/products/6.png",
     colors: ["#F1EDE4", "#8A6A4B", "#4A4A4A", "#BE9D6B", "#FFFFFF"],
@@ -82,7 +83,7 @@ const FALLBACK_PRODUCTS = [
   {
     id: "p4",
     title: "Rayon Voile",
-    price: "₹210",
+    price: 210,
     image: "/images/home/products/7.png",
     hoverImage: "/images/home/products/8.png",
     colors: ["#E4D3B0", "#295C65", "#1B1B1B", "#C97A3D", "#F1EDE4"],
@@ -90,7 +91,7 @@ const FALLBACK_PRODUCTS = [
   {
     id: "p5",
     title: "Mulmul Cotton",
-    price: "₹150",
+    price: 150,
     image: "/images/home/products/9.png",
     hoverImage: "/images/home/products/10.png",
     colors: [],
@@ -98,7 +99,7 @@ const FALLBACK_PRODUCTS = [
   {
     id: "p6",
     title: "Classic Muslin",
-    price: "₹165",
+    price: 165,
     image: "/images/home/products/11.png",
     hoverImage: "/images/home/products/12.png",
     colors: ["#F1EDE4", "#295C65", "#BE9D6B"],
@@ -325,7 +326,7 @@ function normalizeBackendProduct(item) {
     regularPrice,
     salePrice,
     hasSale,
-    price: `₹${(hasSale ? salePrice : regularPrice).toLocaleString("en-IN")}`,
+    price: hasSale ? salePrice : regularPrice,
     image: uniqueImages[0] || FALLBACK_IMAGE,
     hoverImage: uniqueImages[1] || uniqueImages[0] || FALLBACK_IMAGE,
     colorOptions,
@@ -816,12 +817,12 @@ function ProductCard({ product }) {
         {/* Price: card section mein */}
         <div className="pc-price-row">
           <span className="pc-price-new">
-            ₹{finalPrice.toLocaleString("en-IN")}
+            <StorefrontPrice amount={finalPrice} />
           </span>
 
           {hasSale ? (
             <span className="pc-price-old">
-              ₹{regularPrice.toLocaleString("en-IN")}
+              <StorefrontPrice amount={regularPrice} />
             </span>
           ) : null}
         </div>

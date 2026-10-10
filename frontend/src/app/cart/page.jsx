@@ -11,6 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
+import { useStorefrontPreferences } from "@/context/StorefrontPreferencesContext";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api";
@@ -27,6 +28,7 @@ const COLORS = {
 
 export default function CartPage() {
   const router = useRouter();
+  const { formatPrice } = useStorefrontPreferences();
   const {
     items,
     itemCount,
@@ -1547,7 +1549,7 @@ export default function CartPage() {
                                 6,
                             }}
                           >
-                            ₹{item.regularPrice}
+                            {formatPrice(item.regularPrice)}
                           </span>
                         )}
 
@@ -1611,8 +1613,8 @@ export default function CartPage() {
                         {item.unavailable
                           ? "Unavailable — excluded from total"
                           : item.sellingMode === "meter"
-                          ? `${item.cartQuantity}m × ₹${Number(item.price || 0).toLocaleString("en-IN")}/m = ₹${(Number(item.price || 0) * Number(item.cartQuantity || 0)).toLocaleString("en-IN")}`
-                          : `${item.cartQuantity} unit${Number(item.cartQuantity || 0) === 1 ? "" : "s"} × ₹${Number(item.price || 0).toLocaleString("en-IN")} = ₹${(Number(item.price || 0) * Number(item.cartQuantity || 0)).toLocaleString("en-IN")}`}
+                          ? `${item.cartQuantity}m × ${formatPrice(item.price)}/m = ${formatPrice(Number(item.price || 0) * Number(item.cartQuantity || 0))}`
+                          : `${item.cartQuantity} unit${Number(item.cartQuantity || 0) === 1 ? "" : "s"} × ${formatPrice(item.price)} = ${formatPrice(Number(item.price || 0) * Number(item.cartQuantity || 0))}`}
                       </span>
 
                     </div>
@@ -1704,7 +1706,7 @@ export default function CartPage() {
                 </span>
 
                 <strong>
-                  ₹{subtotal}
+                  {formatPrice(subtotal)}
                 </strong>
 
               </div>
@@ -1716,7 +1718,7 @@ export default function CartPage() {
                 </span>
 
                 <strong>
-                  {shippingLoading ? "Calculating…" : `₹${shipping.toLocaleString("en-IN")}`}
+                  {shippingLoading ? "Calculating…" : formatPrice(shipping)}
                 </strong>
 
               </div>
@@ -1730,7 +1732,7 @@ export default function CartPage() {
                 </span>
 
                 <span className="cart-total">
-                  ₹{total}
+                  {formatPrice(total)}
                 </span>
 
               </div>
