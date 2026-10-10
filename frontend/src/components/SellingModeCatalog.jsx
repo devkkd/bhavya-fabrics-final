@@ -1311,7 +1311,7 @@ export default function SellingModeCatalog({
           box-sizing: border-box;
           background: ${COLORS.cream};
           color: ${COLORS.ink};
-          padding: 34px 28px 78px;
+          padding: 34px 62px 78px;
         }
 
         .selling-catalog-inner {

@@ -19,7 +19,7 @@ const API_URL = (
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api"
 ).replace(/\/+$/, "");
 
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 8;
 
 const COLORS = {
   teal: "#295C65",
@@ -991,6 +991,14 @@ function SearchResults() {
   const [loading, setLoading] = useState(Boolean(query));
   const [error, setError] = useState("");
   const [loginOpen, setLoginOpen] = useState(false);
+  const [pageSelection, setPageSelection] = useState({
+    query,
+    page: 1,
+  });
+  const currentPage =
+    pageSelection.query === query ? pageSelection.page : 1;
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalProducts, setTotalProducts] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -1010,7 +1018,7 @@ function SearchResults() {
         const firstResponse = await fetch(
           `${API_URL}/products?search=${encodeURIComponent(
             query
-          )}&page=1&limit=${PAGE_SIZE}`,
+          )}&page=${currentPage}&limit=${PAGE_SIZE}`,
           {
             method: "GET",
             cache: "no-store",
@@ -1035,72 +1043,8 @@ function SearchResults() {
         const firstProducts = extractProducts(
           firstPayload
         );
-
-        const totalPages = Math.max(
-          Number(
-            firstPayload?.pagination?.totalPages || 1
-          ),
-          1
-        );
-
-        if (totalPages <= 1) {
-          setProducts(
-            firstProducts
-              .filter(
-                (item) =>
-                  item?.status === "published" ||
-                  !item?.status
-              )
-              .map(normalizeProduct)
-              .filter(Boolean)
-          );
-          return;
-        }
-
-        const remainingRequests = Array.from(
-          { length: totalPages - 1 },
-          (_, index) =>
-            fetch(
-              `${API_URL}/products?search=${encodeURIComponent(
-                query
-              )}&page=${index + 2}&limit=${PAGE_SIZE}`,
-              {
-                method: "GET",
-                cache: "no-store",
-                signal: controller.signal,
-              }
-            )
-        );
-
-        const responses = await Promise.all(
-          remainingRequests
-        );
-
-        const payloads = await Promise.all(
-          responses.map(async (response) => {
-            let payload = {};
-            try {
-              payload = await response.json();
-            } catch {
-              payload = {};
-            }
-            if (!response.ok) {
-              throw new Error(
-                payload?.message ||
-                  "Unable to load all search results."
-              );
-            }
-            return payload;
-          })
-        );
-
-        const merged = [
-          firstProducts,
-          ...payloads.map(extractProducts),
-        ].flat();
-
         setProducts(
-          merged
+          firstProducts
             .filter(
               (item) =>
                 item?.status === "published" ||
@@ -1108,6 +1052,16 @@ function SearchResults() {
             )
             .map(normalizeProduct)
             .filter(Boolean)
+        );
+        setTotalPages(
+          Math.max(
+            Number(firstPayload?.pagination?.totalPages) || 1,
+            1
+          )
+        );
+        setTotalProducts(
+          Number(firstPayload?.pagination?.total) ||
+            firstProducts.length
         );
       } catch (fetchError) {
         if (fetchError?.name === "AbortError") return;
@@ -1121,6 +1075,8 @@ function SearchResults() {
             "Unable to load search results."
         );
         setProducts([]);
+        setTotalPages(1);
+        setTotalProducts(0);
       } finally {
         if (!controller.signal.aborted) {
           setLoading(false);
@@ -1129,7 +1085,47 @@ function SearchResults() {
     })();
 
     return () => controller.abort();
-  }, [query]);
+  }, [query, currentPage]);
+
+  const paginationItems = useMemo(() => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+
+    if (currentPage <= 4) {
+      return [1, 2, 3, 4, 5, "dots", totalPages];
+    }
+
+    if (currentPage >= totalPages - 3) {
+      return [
+        1,
+        "dots",
+        totalPages - 4,
+        totalPages - 3,
+        totalPages - 2,
+        totalPages - 1,
+        totalPages,
+      ];
+    }
+
+    return [
+      1,
+      "dots",
+      currentPage - 1,
+      currentPage,
+      currentPage + 1,
+      "dots-end",
+      totalPages,
+    ];
+  }, [currentPage, totalPages]);
+
+  const changePage = (page) => {
+    setPageSelection({
+      query,
+      page: Math.min(Math.max(page, 1), totalPages),
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   return (
     <main className="sr-page">
@@ -1150,8 +1146,8 @@ function SearchResults() {
               {query
                 ? loading
                   ? "Finding matching products..."
-                  : `${products.length} related ${
-                      products.length === 1
+                  : `${totalProducts} related ${
+                      totalProducts === 1
                         ? "product"
                         : "products"
                     } found`
@@ -1206,6 +1202,51 @@ function SearchResults() {
               />
             ))}
           </div>
+        )}
+
+        {!loading && !error && products.length > 0 && totalPages > 1 && (
+          <nav className="sr-pagination" aria-label="Search results pages">
+            <button
+              type="button"
+              className="sr-page-button"
+              disabled={currentPage === 1}
+              onClick={() => changePage(currentPage - 1)}
+              aria-label="Previous page"
+            >
+              Previous
+            </button>
+
+            {paginationItems.map((item) =>
+              typeof item === "number" ? (
+                <button
+                  key={item}
+                  type="button"
+                  className={`sr-page-button ${
+                    item === currentPage ? "active" : ""
+                  }`}
+                  onClick={() => changePage(item)}
+                  aria-label={`Page ${item}`}
+                  aria-current={item === currentPage ? "page" : undefined}
+                >
+                  {item}
+                </button>
+              ) : (
+                <span key={item} className="sr-page-ellipsis" aria-hidden="true">
+                  …
+                </span>
+              )
+            )}
+
+            <button
+              type="button"
+              className="sr-page-button"
+              disabled={currentPage === totalPages}
+              onClick={() => changePage(currentPage + 1)}
+              aria-label="Next page"
+            >
+              Next
+            </button>
+          </nav>
         )}
       </div>
 
@@ -1326,6 +1367,51 @@ function SearchResults() {
           grid-template-columns: repeat(4, minmax(0, 1fr));
           gap: 22px;
           align-items: start;
+        }
+
+        .sr-pagination {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: 34px;
+        }
+
+        .sr-page-button {
+          min-width: 40px;
+          height: 40px;
+          padding: 0 12px;
+          border: 1px solid ${COLORS.border};
+          border-radius: 9px;
+          background: ${COLORS.white};
+          color: ${COLORS.teal};
+          font-family: "Poppins", Arial, sans-serif;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          transition:
+            border-color 0.18s ease,
+            background 0.18s ease,
+            color 0.18s ease;
+        }
+
+        .sr-page-button:hover:not(:disabled),
+        .sr-page-button.active {
+          border-color: ${COLORS.teal};
+          background: ${COLORS.teal};
+          color: ${COLORS.white};
+        }
+
+        .sr-page-button:disabled {
+          opacity: 0.45;
+          cursor: not-allowed;
+        }
+
+        .sr-page-ellipsis {
+          color: ${COLORS.muted};
+          font-family: "Poppins", Arial, sans-serif;
+          font-size: 13px;
         }
 
         .sr-card {
@@ -1936,6 +2022,18 @@ function SearchResults() {
           .sr-grid {
             grid-template-columns: 1fr;
             gap: 16px;
+          }
+
+          .sr-pagination {
+            gap: 5px;
+            margin-top: 26px;
+          }
+
+          .sr-page-button {
+            min-width: 34px;
+            height: 36px;
+            padding: 0 8px;
+            font-size: 11px;
           }
 
           .sr-heading h1 {
