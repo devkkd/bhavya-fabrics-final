@@ -6,9 +6,9 @@ const COLORS = {
   white: "#ffffff",
 };
 
-// 🔧 apna WhatsApp number yahan daalo (country code ke saath, bina + ya space ke)
+// WhatsApp number in international format, without "+" or spaces.
 const WHATSAPP_URL =
-  "https://wa.me/91XXXXXXXXXX?text=Hello%20Bhavya%20Fabrics%2C%20I%20would%20like%20to%20know%20more%20about%20your%20fabric%20collections.";
+  "https://wa.me/918302906190?text=Hello%20Bhavya%20Fabrics%2C%20I%20would%20like%20to%20know%20more%20about%20your%20fabric%20collections.";
 
 export default function JoinSection() {
   return (

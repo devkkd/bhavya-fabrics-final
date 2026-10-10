@@ -48,7 +48,7 @@ const MARQUEE_ITEMS = [
   { icon: "globe", text: "Worldwide Export" },
 ];
 
-const WHATSAPP_NUMBER = "919829000000";
+const WHATSAPP_NUMBER = "918302906190";
 
 // Put your logo image inside /public and update this path if needed.
 const LOGO_IMAGE_SRC = "/images/logo.png";
