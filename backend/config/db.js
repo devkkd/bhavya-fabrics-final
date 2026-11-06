@@ -11,9 +11,20 @@ const connectDB = async () => {
       );
     }
 
+    // Force IPv4 DNS resolution for SRV records
+    const dns = require("dns");
+    dns.setDefaultResultOrder("ipv4first");
+
     const connection =
       await mongoose.connect(
-        mongoURI
+        mongoURI,
+        {
+          retryWrites: true,
+          serverSelectionTimeoutMS: 30000,
+          socketTimeoutMS: 45000,
+          connectTimeoutMS: 30000,
+          family: 4, // Force IPv4
+        }
       );
 
     console.log(
@@ -44,8 +55,17 @@ const connectDB = async () => {
     console.error(
       "========================================"
     );
+    console.error("");
+    console.error(
+      "⚠️  WORKAROUND: Starting backend without MongoDB"
+    );
+    console.error(
+      "⚠️  Note: Database operations will fail"
+    );
+    console.error("");
 
-    process.exit(1);
+    // Don't exit - allow backend to start
+    // process.exit(1);
   }
 };
 

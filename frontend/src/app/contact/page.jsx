@@ -1,7 +1,4 @@
 "use client";
-
-
-
 import Image from "next/image";
 
 import { useState } from "react";
@@ -76,13 +73,13 @@ const COLORS = {
 
 const DESKTOP_HERO =
 
-  "/images/contact/desktopHero.png";
+  "/images/contact/banner-1.png";
 
 
 
 const MOBILE_HERO =
 
-  "/images/contact/mobileHero.png";
+  "/images/contact/mobile-1.png";
 
 
 
@@ -392,7 +389,7 @@ export default function ContactPage() {
 
           data?.message ||
 
-            "Unable to submit your enquiry. Please try again."
+          "Unable to submit your enquiry. Please try again."
 
         );
 
@@ -446,7 +443,7 @@ export default function ContactPage() {
 
         error?.message ||
 
-          "Something went wrong. Please try again."
+        "Something went wrong. Please try again."
 
       );
 
@@ -476,13 +473,11 @@ export default function ContactPage() {
 
           className={
 
-            `contact-toast ${
+            `contact-toast ${toast.type === "success"
 
-              toast.type === "success"
+              ? "contact-toast-success"
 
-                ? "contact-toast-success"
-
-                : "contact-toast-error"
+              : "contact-toast-error"
 
             }`
 
@@ -1011,27 +1006,14 @@ export default function ContactPage() {
         /* Mobile image hidden on desktop */
 
         .contact-hero-mobile-image {
-
           display: none;
-
         }
 
-
-
         .contact-hero-overlay {
-
           position: absolute;
-
-
-
           inset: 0;
-
-
-
           background:
-
             linear-gradient(
-
               90deg,
 
               rgba(
@@ -4126,7 +4108,7 @@ export default function ContactPage() {
 
             typeof window !==
 
-              "undefined" &&
+            "undefined" &&
 
             window.innerWidth <= 700
 

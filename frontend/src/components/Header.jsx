@@ -1294,8 +1294,8 @@ export default function Header({ wishlistCount = 0, cartCount = 0 }) {
           display: flex;
           align-items: center;
           justify-content: center;
-          width: 54px;
-          height: 54px;
+          width: 74px;
+          height: 74px;
           flex-shrink: 0;
           border-radius: 50%;
           overflow: hidden;
